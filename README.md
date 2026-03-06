@@ -4,7 +4,7 @@ A small macOS menu bar app that shows your Codex rate-limit remaining values.
 
 ## What It Does
 
-- Shows the current `5h` and `Weekly` remaining percentages in the menu bar.
+- Shows the current `5h` remaining percentage in the menu bar.
 - Shows a popover with used/remaining percentages, progress bars, and reset timing.
 - Refreshes automatically every 60 seconds.
 - Supports manual refresh from the menu bar item's right-click menu.
