@@ -4,12 +4,30 @@ import XCTest
 
 @MainActor
 final class RateLimitStoreTests: XCTestCase {
+    func testMakeCardsSortsHighestUsedFirstAndMarksPrimary() {
+        let snapshot = CodexRateLimitsSnapshot(
+            credits: nil,
+            limitId: "codex",
+            limitName: "Codex",
+            planType: .pro,
+            primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 88, windowDurationMins: 300),
+            secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 92, windowDurationMins: 10080)
+        )
+
+        let cards = RateLimitStore.makeCards(from: snapshot)
+
+        XCTAssertEqual(cards.map(\.usedPercent), [92, 88])
+        XCTAssertTrue(cards[0].isPrimary)
+        XCTAssertFalse(cards[1].isPrimary)
+        XCTAssertEqual(cards[0].title, "Weekly")
+    }
+
     func testReconnectsAfterDisconnectEvent() async {
         let client = FakeCodexRateLimitClient()
         let store = RateLimitStore(
             client: client,
             reconnectDelayNanoseconds: 50_000_000,
-            refreshIntervalNanoseconds: 10_000_000_000
+            refreshDelayNanosecondsProvider: { 10_000_000_000 }
         )
 
         await store.start()
@@ -26,7 +44,7 @@ final class RateLimitStoreTests: XCTestCase {
         let store = RateLimitStore(
             client: client,
             reconnectDelayNanoseconds: 10_000_000_000,
-            refreshIntervalNanoseconds: 50_000_000
+            refreshDelayNanosecondsProvider: { 50_000_000 }
         )
 
         await store.start()
@@ -34,6 +52,25 @@ final class RateLimitStoreTests: XCTestCase {
 
         XCTAssertGreaterThanOrEqual(client.loadSnapshotCallCount, 2)
         await store.stop()
+    }
+
+    func testDefaultRefreshDelayAlignsToNextMinuteBoundary() {
+        let timeZone = TimeZone(secondsFromGMT: 0)!
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let now = calendar.date(from: DateComponents(
+            timeZone: timeZone,
+            year: 2026,
+            month: 3,
+            day: 6,
+            hour: 12,
+            minute: 34,
+            second: 45,
+            nanosecond: 250_000_000
+        ))!
+        let delay = RateLimitStore.defaultRefreshDelayNanoseconds(now: now, calendar: calendar)
+
+        XCTAssertEqual(delay, 14_750_000_000)
     }
 }
 

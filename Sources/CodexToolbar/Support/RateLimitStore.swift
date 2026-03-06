@@ -14,14 +14,13 @@ final class RateLimitStore {
     }
 
     var state: State = .idle
-    var primaryRow: RateLimitRowViewData?
-    var secondaryRow: RateLimitRowViewData?
+    var cards: [RateLimitCardViewData] = []
     var statusMessage = "Connecting to Codex…"
     var lastUpdated: Date?
 
     private let client: any CodexRateLimitClient
     private let reconnectDelayNanoseconds: UInt64
-    private let refreshIntervalNanoseconds: UInt64
+    private let refreshDelayNanosecondsProvider: @Sendable () -> UInt64
     private var started = false
     private var eventTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
@@ -30,11 +29,11 @@ final class RateLimitStore {
     init(
         client: any CodexRateLimitClient,
         reconnectDelayNanoseconds: UInt64 = 2_000_000_000,
-        refreshIntervalNanoseconds: UInt64 = 60_000_000_000
+        refreshDelayNanosecondsProvider: @escaping @Sendable () -> UInt64 = { RateLimitStore.defaultRefreshDelayNanoseconds() }
     ) {
         self.client = client
         self.reconnectDelayNanoseconds = reconnectDelayNanoseconds
-        self.refreshIntervalNanoseconds = refreshIntervalNanoseconds
+        self.refreshDelayNanosecondsProvider = refreshDelayNanosecondsProvider
     }
 
     func start() async {
@@ -52,7 +51,7 @@ final class RateLimitStore {
         refreshTask = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: refreshIntervalNanoseconds)
+                try? await Task.sleep(nanoseconds: refreshDelayNanosecondsProvider())
                 guard !Task.isCancelled else { return }
                 await refreshNow(source: .timer)
             }
@@ -77,8 +76,8 @@ final class RateLimitStore {
     }
 
     var statusBarText: String {
-        if let primaryRow {
-            return primaryRow.percentText
+        if let primaryCard = cards.first {
+            return "\(primaryCard.remainingPercent)% \(primaryCard.compactLabel)"
         }
 
         switch state {
@@ -91,10 +90,6 @@ final class RateLimitStore {
         }
     }
 
-    var rows: [RateLimitRowViewData] {
-        [primaryRow, secondaryRow].compactMap { $0 }
-    }
-
     private enum RefreshSource {
         case startup
         case timer
@@ -104,7 +99,7 @@ final class RateLimitStore {
 
     private func refreshNow(source: RefreshSource) async {
         state = .connecting
-        if primaryRow == nil || source == .manual {
+        if cards.isEmpty || source == .manual {
             statusMessage = "Connecting to Codex…"
         }
 
@@ -145,11 +140,10 @@ final class RateLimitStore {
     }
 
     private func apply(snapshot: CodexRateLimitsSnapshot) {
-        primaryRow = snapshot.primary.map { RateLimitRowViewData(window: $0) }
-        secondaryRow = snapshot.secondary.map { RateLimitRowViewData(window: $0) }
+        cards = Self.makeCards(from: snapshot)
         lastUpdated = Date()
 
-        if rows.isEmpty {
+        if cards.isEmpty {
             applyError("No rate-limit data available.")
             return
         }
@@ -163,9 +157,37 @@ final class RateLimitStore {
         statusMessage = message
 
         if message == "Sign in to Codex to view rate limits." || message == "No rate-limit data available." {
-            primaryRow = nil
-            secondaryRow = nil
+            cards = []
         }
+    }
+
+    static func makeCards(
+        from snapshot: CodexRateLimitsSnapshot,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [RateLimitCardViewData] {
+        let windows = [snapshot.primary, snapshot.secondary].compactMap { $0 }
+        let sorted = windows.sorted {
+            if $0.usedPercent == $1.usedPercent {
+                return ($0.windowDurationMins ?? .max) < ($1.windowDurationMins ?? .max)
+            }
+            return $0.usedPercent > $1.usedPercent
+        }
+
+        return sorted.enumerated().map { index, window in
+            RateLimitCardViewData(window: window, isPrimary: index == 0, now: now, calendar: calendar)
+        }
+    }
+
+    nonisolated static func defaultRefreshDelayNanoseconds(now: Date = Date(), calendar: Calendar = .current) -> UInt64 {
+        let currentSecond = calendar.component(.second, from: now)
+        let currentNanosecond = calendar.component(.nanosecond, from: now)
+
+        let remainingSeconds = max(0, 59 - currentSecond)
+        let remainingNanoseconds = max(0, 1_000_000_000 - currentNanosecond)
+        let totalNanoseconds = UInt64(remainingSeconds) * 1_000_000_000 + UInt64(remainingNanoseconds)
+
+        return max(totalNanoseconds, 1_000_000)
     }
 
     private func scheduleReconnect() {

@@ -97,14 +97,77 @@ enum Account: Codable, Equatable, Sendable {
     }
 }
 
-struct RateLimitRowViewData: Equatable, Sendable {
-    let label: String
-    let percentText: String
-    let resetText: String
+enum RateLimitProgressState: Equatable, Sendable {
+    case normal
+    case warning
+    case critical
+    case exhausted
 
-    init(window: CodexRateLimitWindow, now: Date = Date(), calendar: Calendar = .current) {
-        label = RateLimitFormatter.windowLabel(for: window.windowDurationMins)
-        percentText = "\(RateLimitFormatter.remainingPercent(fromUsedPercent: window.usedPercent))%"
-        resetText = RateLimitFormatter.resetText(for: window.resetDate, now: now, calendar: calendar)
+    init(usedPercent: Int) {
+        switch usedPercent {
+        case 100...:
+            self = .exhausted
+        case 90...:
+            self = .critical
+        case 70...:
+            self = .warning
+        default:
+            self = .normal
+        }
+    }
+}
+
+struct RateLimitCardViewData: Equatable, Sendable {
+    let title: String
+    let compactLabel: String
+    let usedPercent: Int
+    let remainingPercent: Int
+    let usageText: String
+    let relativeResetText: String?
+    let absoluteResetText: String
+    let combinedResetText: String
+    let progressState: RateLimitProgressState
+    let isPrimary: Bool
+    let statusMessage: String?
+    let resetDate: Date?
+
+    var accessibilityLabel: String {
+        var parts = [
+            title,
+            "\(usedPercent)% used",
+            "\(remainingPercent)% remaining",
+            combinedResetText
+        ]
+
+        if let statusMessage {
+            parts.insert(statusMessage, at: 1)
+        }
+
+        return parts.joined(separator: ". ")
+    }
+
+    init(window: CodexRateLimitWindow, isPrimary: Bool = false, now: Date = Date(), calendar: Calendar = .current) {
+        title = RateLimitFormatter.windowTitle(for: window.windowDurationMins)
+        compactLabel = RateLimitFormatter.compactWindowLabel(for: window.windowDurationMins)
+        usedPercent = window.usedPercent
+        remainingPercent = RateLimitFormatter.remainingPercent(fromUsedPercent: window.usedPercent)
+        usageText = "\(usedPercent)% used · \(remainingPercent)% remaining"
+        relativeResetText = RateLimitFormatter.relativeResetText(for: window.resetDate, now: now, calendar: calendar)
+        absoluteResetText = RateLimitFormatter.absoluteResetText(for: window.resetDate, now: now, calendar: calendar)
+        combinedResetText = RateLimitFormatter.combinedResetText(for: window.resetDate, now: now, calendar: calendar)
+        progressState = RateLimitProgressState(usedPercent: window.usedPercent)
+        self.isPrimary = isPrimary
+        resetDate = window.resetDate
+
+        switch progressState {
+        case .normal:
+            statusMessage = nil
+        case .warning:
+            statusMessage = "Approaching limit"
+        case .critical:
+            statusMessage = "Very little capacity remaining"
+        case .exhausted:
+            statusMessage = "Rate limit reached"
+        }
     }
 }

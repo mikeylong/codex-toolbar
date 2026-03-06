@@ -2,120 +2,119 @@ import SwiftUI
 
 struct StatusMenuContentView: View {
     let store: RateLimitStore
-    let loginItemController: LoginItemController
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 10) {
-                CodexGlyphView()
-                    .frame(width: 18, height: 18)
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Codex rate limit status")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary)
 
-                Text("Rate limits remaining")
-                    .font(.system(size: 17, weight: .semibold))
-            }
-
-            if store.rows.isEmpty {
+            if store.cards.isEmpty {
                 Text(store.statusMessage)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .font(.body)
+                    .foregroundStyle(.primary)
             } else {
-                VStack(alignment: .leading, spacing: 14) {
-                    ForEach(Array(store.rows.enumerated()), id: \.offset) { _, row in
-                        HStack(spacing: 12) {
-                            Text(row.label)
-                                .font(.system(size: 16, weight: .semibold))
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(store.cards.enumerated()), id: \.offset) { index, card in
+                        RateLimitCardView(card: card)
 
-                            Text(row.percentText)
-                                .font(.system(size: 16, weight: .regular))
-                                .foregroundStyle(.secondary)
-
-                            Text(row.resetText)
-                                .font(.system(size: 16, weight: .regular))
-                                .foregroundStyle(.secondary)
-                                .frame(minWidth: 72, alignment: .trailing)
+                        if index < store.cards.count - 1 {
+                            Divider()
+                                .padding(.vertical, 14)
                         }
                     }
                 }
             }
 
-            Divider()
-
-            if let lastUpdated = store.lastUpdated {
+            if let lastUpdated = store.lastUpdated, !store.cards.isEmpty {
+                Divider()
                 Text("Updated \(lastUpdated.formatted(date: .omitted, time: .shortened))")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-            } else {
-                Text(store.state == .connecting ? "Connecting…" : store.statusMessage)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 10) {
-                Button("Refresh now") {
-                    Task {
-                        await store.refreshNow()
-                    }
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 13, weight: .medium))
-
-                Toggle(isOn: Binding(
-                    get: { loginItemController.isEnabled },
-                    set: { loginItemController.setEnabled($0) }
-                )) {
-                    Text("Launch at login")
-                        .font(.system(size: 13, weight: .medium))
-                }
-                .toggleStyle(.checkbox)
-
-                if !loginItemController.statusMessage.isEmpty {
-                    Text(loginItemController.statusMessage)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-
-                Button("Quit") {
-                    NSApplication.shared.terminate(nil)
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 13, weight: .medium))
+                    .font(.body)
+                    .foregroundStyle(.primary)
             }
         }
         .padding(16)
-        .frame(width: 300, alignment: .leading)
+        .frame(width: 352, alignment: .leading)
     }
 }
 
-struct StatusBarLabelView: View {
-    let store: RateLimitStore
+private struct RateLimitCardView: View {
+    let card: RateLimitCardViewData
 
     var body: some View {
-        HStack(spacing: 6) {
-            CodexGlyphView()
-                .frame(width: 14, height: 14)
-            Text(store.statusBarText)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+        VStack(alignment: .leading, spacing: 7) {
+            if let statusMessage = card.statusMessage {
+                Label(statusMessage, systemImage: statusIcon)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+            }
+
+            Text(card.title)
+                .font(.body.weight(card.isPrimary ? .semibold : .regular))
+                .foregroundStyle(.primary)
+
+            RateLimitProgressBar(card: card)
+                .padding(.top, 1)
+
+            Text(card.usageText)
+                .font(.body)
+                .foregroundStyle(.primary)
+
+            Text(card.combinedResetText)
+                .font(.body)
+                .foregroundStyle(.primary)
+
+            if card.progressState == .exhausted {
+                Text("Requests will resume when window resets.")
+                    .font(.body)
+                    .foregroundStyle(.primary)
+            }
+        }
+        .padding(.vertical, card.isPrimary ? 2 : 0)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(card.accessibilityLabel)
+    }
+
+    private var statusIcon: String {
+        switch card.progressState {
+        case .normal:
+            return "chart.bar"
+        case .warning, .critical:
+            return "exclamationmark.triangle.fill"
+        case .exhausted:
+            return "xmark.octagon.fill"
         }
     }
 }
 
-struct CodexGlyphView: View {
-    var body: some View {
-        ZStack {
-            Circle()
-                .trim(from: 0.12, to: 0.94)
-                .stroke(style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
-                .rotation(.degrees(-120))
+private struct RateLimitProgressBar: View {
+    let card: RateLimitCardViewData
 
-            Capsule(style: .continuous)
-                .fill(.primary)
-                .frame(width: 6, height: 2)
-                .offset(x: 2.2, y: -2.5)
-                .rotationEffect(.degrees(18))
+    var body: some View {
+        GeometryReader { geometry in
+            let width = max(geometry.size.width * CGFloat(card.usedPercent) / 100, card.usedPercent > 0 ? 8 : 0)
+
+            ZStack(alignment: .leading) {
+                Capsule(style: .continuous)
+                    .fill(Color(nsColor: .quaternaryLabelColor))
+
+                Capsule(style: .continuous)
+                    .fill(fillColor)
+                    .frame(width: min(width, geometry.size.width))
+            }
         }
-        .foregroundStyle(.primary)
+        .frame(height: 9)
+        .accessibilityHidden(true)
+    }
+
+    private var fillColor: Color {
+        switch card.progressState {
+        case .normal:
+            return Color(nsColor: .labelColor)
+        case .warning:
+            return Color(nsColor: .systemOrange)
+        case .critical, .exhausted:
+            return Color(nsColor: .systemRed)
+        }
     }
 }

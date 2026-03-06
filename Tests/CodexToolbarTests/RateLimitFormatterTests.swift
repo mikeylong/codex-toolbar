@@ -4,11 +4,13 @@ import XCTest
 
 final class RateLimitFormatterTests: XCTestCase {
     func testFiveHourWindowLabel() {
-        XCTAssertEqual(RateLimitFormatter.windowLabel(for: 300), "5h")
+        XCTAssertEqual(RateLimitFormatter.compactWindowLabel(for: 300), "5h")
+        XCTAssertEqual(RateLimitFormatter.windowTitle(for: 300), "Rolling 5-hour window")
     }
 
     func testWeeklyWindowLabel() {
-        XCTAssertEqual(RateLimitFormatter.windowLabel(for: 10080), "Weekly")
+        XCTAssertEqual(RateLimitFormatter.compactWindowLabel(for: 10080), "Weekly")
+        XCTAssertEqual(RateLimitFormatter.windowTitle(for: 10080), "Weekly")
     }
 
     func testRemainingPercentUsesInverseOfUsedPercent() {
@@ -16,7 +18,7 @@ final class RateLimitFormatterTests: XCTestCase {
         XCTAssertEqual(RateLimitFormatter.remainingPercent(fromUsedPercent: 9), 91)
     }
 
-    func testSameDayResetUsesTimeFormat() {
+    func testSameDayResetUsesRelativeAndAbsoluteFormat() {
         let timeZone = TimeZone(secondsFromGMT: 0)!
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
@@ -25,11 +27,11 @@ final class RateLimitFormatterTests: XCTestCase {
         formatter.timeZone = timeZone
 
         let now = formatter.date(from: "2026-03-06T12:00:00Z")!
-        let sameDay = formatter.date(from: "2026-03-06T13:54:00Z")!
+        let sameDay = formatter.date(from: "2026-03-06T13:12:00Z")!
 
         XCTAssertEqual(
-            RateLimitFormatter.resetText(for: sameDay, now: now, calendar: calendar, locale: locale, timeZone: timeZone),
-            "1:54 PM"
+            RateLimitFormatter.combinedResetText(for: sameDay, now: now, calendar: calendar, locale: locale, timeZone: timeZone),
+            "Resets in 1h 12m (1:12 PM)"
         )
     }
 
@@ -45,8 +47,8 @@ final class RateLimitFormatterTests: XCTestCase {
         let futureDay = formatter.date(from: "2026-03-11T12:00:00Z")!
 
         XCTAssertEqual(
-            RateLimitFormatter.resetText(for: futureDay, now: now, calendar: calendar, locale: locale, timeZone: timeZone),
-            "Mar 11"
+            RateLimitFormatter.combinedResetText(for: futureDay, now: now, calendar: calendar, locale: locale, timeZone: timeZone),
+            "Resets Mar 11"
         )
     }
 }
