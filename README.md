@@ -18,7 +18,7 @@ A small macOS menu bar app that shows your Codex rate-limit remaining values.
 ## Install
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/mikeylong/codex-toolbar.git
 cd codex-toolbar
 ./scripts/install_app.sh
 ```
