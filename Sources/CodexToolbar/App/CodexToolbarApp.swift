@@ -1,5 +1,4 @@
 import AppKit
-import CoreGraphics
 import Observation
 import SwiftUI
 
@@ -297,15 +296,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func capturePopover(to directoryURL: URL, configuration: ScreenshotLaunchConfiguration) throws {
         guard
-            let window = popover?.contentViewController?.view.window
+            let popoverContentView = popover?.contentViewController?.view.window?.contentView
         else {
             return
         }
 
-        let windowID = CGWindowID(window.windowNumber)
-        guard let image = CGWindowListCreateImage(.null, .optionIncludingWindow, windowID, [.boundsIgnoreFraming, .bestResolution]) else {
+        popoverContentView.layoutSubtreeIfNeeded()
+
+        let bounds = popoverContentView.bounds.integral
+        guard
+            bounds.width > 0,
+            bounds.height > 0,
+            let representation = popoverContentView.bitmapImageRepForCachingDisplay(in: bounds)
+        else {
             throw ScreenshotCaptureError.unableToCapturePopover
         }
+
+        popoverContentView.cacheDisplay(in: bounds, to: representation)
+
+        let image = NSImage(size: bounds.size)
+        image.lockFocus()
+        representation.draw(in: NSRect(origin: .zero, size: bounds.size))
+        image.unlockFocus()
 
         let fileURL = directoryURL.appendingPathComponent("\(configuration.scenario.name)-\(configuration.appearance.rawValue)-popover.png")
         try Self.writePNG(image, to: fileURL)
@@ -325,15 +337,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let representation = NSBitmapImageRep(data: tiffData) else {
             throw ScreenshotCaptureError.unableToEncodePNG
         }
-        guard let data = representation.representation(using: .png, properties: [:]) else {
-            throw ScreenshotCaptureError.unableToEncodePNG
-        }
-
-        try data.write(to: fileURL, options: .atomic)
-    }
-
-    private static func writePNG(_ image: CGImage, to fileURL: URL) throws {
-        let representation = NSBitmapImageRep(cgImage: image)
         guard let data = representation.representation(using: .png, properties: [:]) else {
             throw ScreenshotCaptureError.unableToEncodePNG
         }

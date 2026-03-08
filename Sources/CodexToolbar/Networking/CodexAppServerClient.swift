@@ -357,15 +357,36 @@ actor CodexAppServerClient: CodexRateLimitClient {
     }
 
     private static func locateCodexCLI() throws -> String {
-        let environmentPath = ProcessInfo.processInfo.environment["PATH"] ?? ""
-        for pathComponent in environmentPath.split(separator: ":") {
-            let candidate = URL(fileURLWithPath: String(pathComponent)).appendingPathComponent("codex").path
+        for candidate in codexPathCandidates(
+            environmentPath: ProcessInfo.processInfo.environment["PATH"] ?? "",
+            homeDirectory: FileManager.default.homeDirectoryForCurrentUser.path
+        ) {
             if FileManager.default.isExecutableFile(atPath: candidate) {
                 return candidate
             }
         }
 
         throw CodexAppServerError.codexCLINotFound
+    }
+
+    nonisolated static func codexPathCandidates(environmentPath: String, homeDirectory: String) -> [String] {
+        let pathCandidates = environmentPath.split(separator: ":").map { pathComponent in
+            URL(fileURLWithPath: String(pathComponent)).appendingPathComponent("codex").path
+        }
+
+        let fallbackCandidates = [
+            URL(fileURLWithPath: homeDirectory).appendingPathComponent(".local/bin/codex").path,
+            "/opt/homebrew/bin/codex",
+            "/usr/local/bin/codex",
+            "/usr/bin/codex"
+        ]
+
+        var seen = Set<String>()
+        let orderedCandidates = pathCandidates + fallbackCandidates
+
+        return orderedCandidates.filter { candidate in
+            seen.insert(candidate).inserted
+        }
     }
 }
 
