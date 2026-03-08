@@ -253,19 +253,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func captureStatusItem(to directoryURL: URL, configuration: ScreenshotLaunchConfiguration) throws {
-        guard
-            let button = statusItem?.button,
-            let buttonWindow = button.window
-        else {
+        guard let button = statusItem?.button else {
             return
         }
 
-        let buttonFrame = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
-        let captureRect = buttonFrame.insetBy(dx: -10, dy: -6)
+        button.layoutSubtreeIfNeeded()
 
-        guard let image = CGWindowListCreateImage(captureRect, .optionOnScreenOnly, .zero, [.bestResolution]) else {
+        let buttonBounds = button.bounds.integral
+        guard
+            buttonBounds.width > 0,
+            buttonBounds.height > 0,
+            let buttonRepresentation = button.bitmapImageRepForCachingDisplay(in: buttonBounds)
+        else {
             throw ScreenshotCaptureError.unableToCaptureStatusItem
         }
+
+        button.cacheDisplay(in: buttonBounds, to: buttonRepresentation)
+
+        let horizontalPadding: CGFloat = 8
+        let verticalPadding: CGFloat = 6
+        let canvasSize = NSSize(
+            width: buttonBounds.width + (horizontalPadding * 2),
+            height: buttonBounds.height + (verticalPadding * 2)
+        )
+
+        let image = NSImage(size: canvasSize)
+        image.lockFocus()
+        backgroundColor(for: configuration.appearance).setFill()
+        NSBezierPath(rect: NSRect(origin: .zero, size: canvasSize)).fill()
+        buttonRepresentation.draw(
+            in: NSRect(
+                x: horizontalPadding,
+                y: verticalPadding,
+                width: buttonBounds.width,
+                height: buttonBounds.height
+            )
+        )
+        image.unlockFocus()
 
         let fileURL = directoryURL.appendingPathComponent("\(configuration.scenario.name)-\(configuration.appearance.rawValue)-status-item.png")
         try Self.writePNG(image, to: fileURL)
@@ -285,6 +309,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let fileURL = directoryURL.appendingPathComponent("\(configuration.scenario.name)-\(configuration.appearance.rawValue)-popover.png")
         try Self.writePNG(image, to: fileURL)
+    }
+
+    private func backgroundColor(for appearance: ScreenshotAppearance) -> NSColor {
+        switch appearance {
+        case .light:
+            return NSColor(calibratedWhite: 0.93, alpha: 1.0)
+        case .dark:
+            return NSColor(calibratedWhite: 0.24, alpha: 1.0)
+        }
+    }
+
+    private static func writePNG(_ image: NSImage, to fileURL: URL) throws {
+        guard let tiffData = image.tiffRepresentation,
+              let representation = NSBitmapImageRep(data: tiffData) else {
+            throw ScreenshotCaptureError.unableToEncodePNG
+        }
+        guard let data = representation.representation(using: .png, properties: [:]) else {
+            throw ScreenshotCaptureError.unableToEncodePNG
+        }
+
+        try data.write(to: fileURL, options: .atomic)
     }
 
     private static func writePNG(_ image: CGImage, to fileURL: URL) throws {
