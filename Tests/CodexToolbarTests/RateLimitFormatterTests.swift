@@ -51,4 +51,18 @@ final class RateLimitFormatterTests: XCTestCase {
             "Resets Mar 11"
         )
     }
+
+    func testUpdatedFooterTextIncludesSeconds() {
+        let timeZone = TimeZone(secondsFromGMT: 0)!
+        let locale = Locale(identifier: "en_US_POSIX")
+        let formatter = ISO8601DateFormatter()
+        formatter.timeZone = timeZone
+
+        let timestamp = formatter.date(from: "2026-03-06T13:03:07Z")!
+
+        XCTAssertEqual(
+            RateLimitFormatter.updatedFooterText(for: timestamp, locale: locale, timeZone: timeZone),
+            "Updated 1:03:07 PM"
+        )
+    }
 }

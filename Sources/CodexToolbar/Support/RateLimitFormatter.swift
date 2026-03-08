@@ -117,4 +117,16 @@ enum RateLimitFormatter {
 
         return "Resets \(absolute)"
     }
+
+    static func updatedFooterText(
+        for date: Date,
+        locale: Locale = .current,
+        timeZone: TimeZone = .current
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.timeZone = timeZone
+        formatter.dateFormat = "h:mm:ss a"
+        return "Updated \(formatter.string(from: date))"
+    }
 }

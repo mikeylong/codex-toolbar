@@ -28,7 +28,7 @@ struct StatusMenuContentView: View {
 
             if let lastUpdated = store.lastUpdated, !store.cards.isEmpty {
                 Divider()
-                Text("Updated \(lastUpdated.formatted(date: .omitted, time: .shortened))")
+                Text(RateLimitFormatter.updatedFooterText(for: lastUpdated))
                     .font(.body)
                     .foregroundStyle(.primary)
             }
