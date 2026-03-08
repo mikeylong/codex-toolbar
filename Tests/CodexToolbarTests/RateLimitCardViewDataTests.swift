@@ -15,12 +15,19 @@ final class RateLimitCardViewDataTests: XCTestCase {
         XCTAssertEqual(RateLimitCardViewData(window: makeWindow(usedPercent: 89, durationMinutes: 300)).progressState, .warning)
         XCTAssertEqual(RateLimitCardViewData(window: makeWindow(usedPercent: 90, durationMinutes: 300)).progressState, .critical)
         XCTAssertEqual(RateLimitCardViewData(window: makeWindow(usedPercent: 100, durationMinutes: 300)).progressState, .exhausted)
+        XCTAssertEqual(RateLimitCardViewData(window: makeWindow(usedPercent: 30, durationMinutes: 300)).progressState, .normal)
     }
 
     func testExhaustedCardShowsReachedMessage() {
         let card = RateLimitCardViewData(window: makeWindow(usedPercent: 100, durationMinutes: 300))
 
         XCTAssertEqual(card.statusMessage, "Rate limit reached")
+    }
+
+    func testUsageCopyStillShowsUsedAndRemaining() {
+        let card = RateLimitCardViewData(window: makeWindow(usedPercent: 90, durationMinutes: 300))
+
+        XCTAssertEqual(card.usageText, "90% used · 10% remaining")
     }
 
     private func makeWindow(usedPercent: Int, durationMinutes: Int) -> CodexRateLimitWindow {

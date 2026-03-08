@@ -92,7 +92,7 @@ private struct RateLimitProgressBar: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let width = max(geometry.size.width * CGFloat(card.usedPercent) / 100, card.usedPercent > 0 ? 8 : 0)
+            let width = max(geometry.size.width * CGFloat(card.remainingPercent) / 100, card.remainingPercent > 0 ? 8 : 0)
 
             ZStack(alignment: .leading) {
                 Capsule(style: .continuous)

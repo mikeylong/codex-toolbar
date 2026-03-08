@@ -4,7 +4,7 @@ import Observation
 @MainActor
 @Observable
 final class RateLimitStore {
-    static let shared = RateLimitStore(client: CodexAppServerClient())
+    static let shared = makeShared()
 
     enum State: Equatable {
         case idle
@@ -21,6 +21,7 @@ final class RateLimitStore {
     private let client: any CodexRateLimitClient
     private let reconnectDelayNanoseconds: UInt64
     private let refreshDelayNanosecondsProvider: @Sendable () -> UInt64
+    private let liveUpdatesEnabled: Bool
     private var started = false
     private var eventTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
@@ -29,16 +30,28 @@ final class RateLimitStore {
     init(
         client: any CodexRateLimitClient,
         reconnectDelayNanoseconds: UInt64 = 2_000_000_000,
-        refreshDelayNanosecondsProvider: @escaping @Sendable () -> UInt64 = { RateLimitStore.defaultRefreshDelayNanoseconds() }
+        refreshDelayNanosecondsProvider: @escaping @Sendable () -> UInt64 = { RateLimitStore.defaultRefreshDelayNanoseconds() },
+        initialState: State = .idle,
+        initialCards: [RateLimitCardViewData] = [],
+        initialStatusMessage: String = "Connecting to Codex…",
+        initialLastUpdated: Date? = nil,
+        liveUpdatesEnabled: Bool = true
     ) {
         self.client = client
         self.reconnectDelayNanoseconds = reconnectDelayNanoseconds
         self.refreshDelayNanosecondsProvider = refreshDelayNanosecondsProvider
+        self.liveUpdatesEnabled = liveUpdatesEnabled
+        state = initialState
+        cards = initialCards
+        statusMessage = initialStatusMessage
+        lastUpdated = initialLastUpdated
     }
 
     func start() async {
         guard !started else { return }
         started = true
+
+        guard liveUpdatesEnabled else { return }
 
         eventTask = Task { [weak self] in
             guard let self else { return }
@@ -164,7 +177,9 @@ final class RateLimitStore {
     static func makeCards(
         from snapshot: CodexRateLimitsSnapshot,
         now: Date = Date(),
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        locale: Locale = .current,
+        timeZone: TimeZone = .current
     ) -> [RateLimitCardViewData] {
         let windows = [snapshot.primary, snapshot.secondary].compactMap { $0 }
         let sorted = windows.sorted {
@@ -175,8 +190,44 @@ final class RateLimitStore {
         }
 
         return sorted.enumerated().map { index, window in
-            RateLimitCardViewData(window: window, isPrimary: index == 0, now: now, calendar: calendar)
+            RateLimitCardViewData(
+                window: window,
+                isPrimary: index == 0,
+                now: now,
+                calendar: calendar,
+                locale: locale,
+                timeZone: timeZone
+            )
         }
+    }
+
+    static func makeShared(
+        arguments: [String] = ProcessInfo.processInfo.arguments,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        clientFactory: @escaping () -> any CodexRateLimitClient = { CodexAppServerClient() }
+    ) -> RateLimitStore {
+        if let launchConfiguration = ScreenshotLaunchConfiguration.current(arguments: arguments, environment: environment) {
+            let cards = makeCards(
+                from: launchConfiguration.scenario.snapshot,
+                now: launchConfiguration.scenario.now,
+                calendar: launchConfiguration.scenario.calendar,
+                locale: launchConfiguration.scenario.locale,
+                timeZone: launchConfiguration.scenario.timeZone
+            )
+            let statusMessage = cards.isEmpty ? "No rate-limit data available." : "Rate limits remaining"
+            let state: State = cards.isEmpty ? .error(statusMessage) : .ready
+
+            return RateLimitStore(
+                client: clientFactory(),
+                initialState: state,
+                initialCards: cards,
+                initialStatusMessage: statusMessage,
+                initialLastUpdated: launchConfiguration.scenario.lastUpdated,
+                liveUpdatesEnabled: false
+            )
+        }
+
+        return RateLimitStore(client: clientFactory())
     }
 
     nonisolated static func defaultRefreshDelayNanoseconds(now: Date = Date(), calendar: Calendar = .current) -> UInt64 {

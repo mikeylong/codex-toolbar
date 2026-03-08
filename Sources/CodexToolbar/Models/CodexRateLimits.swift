@@ -103,13 +103,13 @@ enum RateLimitProgressState: Equatable, Sendable {
     case critical
     case exhausted
 
-    init(usedPercent: Int) {
-        switch usedPercent {
-        case 100...:
+    init(remainingPercent: Int) {
+        switch remainingPercent {
+        case ...0:
             self = .exhausted
-        case 90...:
+        case 1...10:
             self = .critical
-        case 70...:
+        case 11...30:
             self = .warning
         default:
             self = .normal
@@ -146,16 +146,35 @@ struct RateLimitCardViewData: Equatable, Sendable {
         return parts.joined(separator: ". ")
     }
 
-    init(window: CodexRateLimitWindow, isPrimary: Bool = false, now: Date = Date(), calendar: Calendar = .current) {
+    init(
+        window: CodexRateLimitWindow,
+        isPrimary: Bool = false,
+        now: Date = Date(),
+        calendar: Calendar = .current,
+        locale: Locale = .current,
+        timeZone: TimeZone = .current
+    ) {
         title = RateLimitFormatter.windowTitle(for: window.windowDurationMins)
         compactLabel = RateLimitFormatter.compactWindowLabel(for: window.windowDurationMins)
         usedPercent = window.usedPercent
         remainingPercent = RateLimitFormatter.remainingPercent(fromUsedPercent: window.usedPercent)
         usageText = "\(usedPercent)% used · \(remainingPercent)% remaining"
         relativeResetText = RateLimitFormatter.relativeResetText(for: window.resetDate, now: now, calendar: calendar)
-        absoluteResetText = RateLimitFormatter.absoluteResetText(for: window.resetDate, now: now, calendar: calendar)
-        combinedResetText = RateLimitFormatter.combinedResetText(for: window.resetDate, now: now, calendar: calendar)
-        progressState = RateLimitProgressState(usedPercent: window.usedPercent)
+        absoluteResetText = RateLimitFormatter.absoluteResetText(
+            for: window.resetDate,
+            now: now,
+            calendar: calendar,
+            locale: locale,
+            timeZone: timeZone
+        )
+        combinedResetText = RateLimitFormatter.combinedResetText(
+            for: window.resetDate,
+            now: now,
+            calendar: calendar,
+            locale: locale,
+            timeZone: timeZone
+        )
+        progressState = RateLimitProgressState(remainingPercent: remainingPercent)
         self.isPrimary = isPrimary
         resetDate = window.resetDate
 
