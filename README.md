@@ -26,6 +26,14 @@ cd codex-toolbar
 
 That installs `CodexToolbar.app` to `~/Applications` and opens it.
 
+## Uninstall
+
+```bash
+./scripts/uninstall_app.sh
+```
+
+That quits `CodexToolbar` if it is running and removes `~/Applications/CodexToolbar.app`.
+
 ## Use
 
 - Left-click the menu bar item to see the current rate-limit status panel.
