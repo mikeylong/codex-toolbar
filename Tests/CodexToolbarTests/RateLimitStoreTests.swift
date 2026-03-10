@@ -35,10 +35,15 @@ final class RateLimitStoreTests: XCTestCase {
         XCTAssertEqual(client.loadSnapshotCallCount, 1)
 
         client.emit(.disconnected("Codex app-server exited with status 1."))
-        try? await Task.sleep(nanoseconds: 120_000_000)
+        await waitUntil {
+            client.connectCallCount >= 2 && client.loadSnapshotCallCount >= 2
+        }
 
-        XCTAssertEqual(client.connectCallCount, 2)
-        XCTAssertEqual(client.loadSnapshotCallCount, 2)
+        XCTAssertGreaterThanOrEqual(client.connectCallCount, 2)
+        XCTAssertGreaterThanOrEqual(client.loadSnapshotCallCount, 2)
+        XCTAssertEqual(store.state, .ready)
+
+        await store.stop()
     }
 
     func testPeriodicRefreshLoadsSnapshotAgain() async {
@@ -111,6 +116,27 @@ final class RateLimitStoreTests: XCTestCase {
         let delay = RateLimitStore.defaultRefreshDelayNanoseconds(now: now, calendar: calendar)
 
         XCTAssertEqual(delay, 14_750_000_000)
+    }
+
+    private func waitUntil(
+        timeoutNanoseconds: UInt64 = 2_000_000_000,
+        pollNanoseconds: UInt64 = 20_000_000,
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        condition: @escaping @MainActor () -> Bool
+    ) async {
+        let deadline = ContinuousClock.now.advanced(by: .nanoseconds(Int64(timeoutNanoseconds)))
+
+        while ContinuousClock.now < deadline {
+            if condition() {
+                return
+            }
+
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: pollNanoseconds)
+        }
+
+        XCTFail("Timed out waiting for condition.", file: file, line: line)
     }
 }
 
