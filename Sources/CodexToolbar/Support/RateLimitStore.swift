@@ -17,6 +17,8 @@ final class RateLimitStore {
     var cards: [RateLimitCardViewData] = []
     var statusMessage = "Connecting to Codex…"
     var lastUpdated: Date?
+    var staleMessage: String?
+    var debugDetail: String?
 
     private let client: any CodexRateLimitClient
     private let reconnectDelayNanoseconds: UInt64
@@ -70,6 +72,21 @@ final class RateLimitStore {
             }
         }
 
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                debugDetail = "Connecting to Codex app-server"
+                try await client.connect()
+                if debugDetail == "Connecting to Codex app-server" {
+                    debugDetail = "Live updates connected"
+                }
+            } catch {
+                debugDetail = "Connect failed: \(error.localizedDescription)"
+                handleRefreshError(error, preserveCards: !cards.isEmpty)
+                scheduleReconnect()
+            }
+        }
+
         await refreshNow(source: .startup)
     }
 
@@ -89,15 +106,11 @@ final class RateLimitStore {
     }
 
     var statusBarText: String {
-        if let primaryCard = cards.first {
-            return "\(primaryCard.remainingPercent)% \(primaryCard.compactLabel)"
-        }
-
         switch state {
         case .idle, .connecting:
-            return "--"
+            return cards.first.map { "\($0.remainingPercent)% \($0.compactLabel)" } ?? "--"
         case .ready:
-            return "--"
+            return cards.first.map { "\($0.remainingPercent)% \($0.compactLabel)" } ?? "--"
         case .error:
             return "!"
         }
@@ -115,37 +128,37 @@ final class RateLimitStore {
         if cards.isEmpty || source == .manual {
             statusMessage = "Connecting to Codex…"
         }
+        staleMessage = nil
+        debugDetail = "Refresh source: \(String(describing: source))"
 
         do {
-            let (account, response) = try await client.loadSnapshot()
+            let refreshToken = source != .startup
+            debugDetail = "Loading snapshot (refreshToken=\(refreshToken))"
+            let (account, response) = try await client.loadSnapshot(refreshToken: refreshToken)
+            debugDetail = "Snapshot loaded"
 
             if account.account == nil {
+                debugDetail = "No signed-in account"
                 applyError("Sign in to Codex to view rate limits.")
                 return
             }
 
-            apply(snapshot: response.codexSnapshot())
+            apply(snapshot: response.displaySnapshot())
         } catch let error as CodexAppServerError {
-            switch error {
-            case .codexCLINotFound:
-                applyError("Codex CLI not found.")
-            default:
-                applyError(error.localizedDescription)
-                scheduleReconnect()
-            }
+            handleRefreshError(error, preserveCards: !cards.isEmpty)
         } catch {
-            applyError("Unable to load Codex rate limits.")
-            scheduleReconnect()
+            handleRefreshError(error, preserveCards: !cards.isEmpty)
         }
     }
 
     private func handle(event: CodexAppServerEvent) async {
         switch event {
         case let .rateLimitsUpdated(response):
-            apply(snapshot: response.codexSnapshot())
+            apply(snapshot: response.displaySnapshot())
         case let .disconnected(reason):
             state = .error("Disconnected from Codex.")
             statusMessage = reason ?? "Retrying…"
+            staleMessage = cards.isEmpty ? nil : (reason ?? "Disconnected from Codex.")
             scheduleReconnect()
         case .stderr:
             break
@@ -157,20 +170,51 @@ final class RateLimitStore {
         lastUpdated = Date()
 
         if cards.isEmpty {
+            debugDetail = "Snapshot contained no cards"
             applyError("No rate-limit data available.")
             return
         }
 
         state = .ready
         statusMessage = "Rate limits remaining"
+        staleMessage = nil
+        debugDetail = "Ready"
     }
 
     private func applyError(_ message: String) {
         state = .error(message)
         statusMessage = message
+        staleMessage = cards.isEmpty ? nil : message
+        debugDetail = message
 
         if message == "Sign in to Codex to view rate limits." || message == "No rate-limit data available." {
             cards = []
+            staleMessage = nil
+        }
+    }
+
+    private func handleRefreshError(_ error: Error, preserveCards: Bool) {
+        let message: String
+
+        if let appServerError = error as? CodexAppServerError {
+            switch appServerError {
+            case .codexCLINotFound:
+                message = "Codex CLI not found."
+            default:
+                message = appServerError.localizedDescription
+            }
+        } else {
+            message = "Unable to load Codex rate limits."
+        }
+
+        if preserveCards {
+            state = .error(message)
+            statusMessage = message
+            staleMessage = message
+            scheduleReconnect()
+        } else {
+            applyError(message)
+            scheduleReconnect()
         }
     }
 
@@ -248,6 +292,13 @@ final class RateLimitStore {
             guard let self else { return }
             try? await Task.sleep(nanoseconds: reconnectDelayNanoseconds)
             guard !Task.isCancelled else { return }
+            do {
+                try await client.connect()
+            } catch {
+                handleRefreshError(error, preserveCards: !cards.isEmpty)
+                scheduleReconnect()
+                return
+            }
             await refreshNow(source: .reconnect)
         }
     }

@@ -64,7 +64,7 @@ private final class FakeStartupDiagnosticsClient: @unchecked Sendable, CodexRate
 
     func disconnect() async {}
 
-    func readAccount() async throws -> GetAccountResponse {
+    func readAccount(refreshToken: Bool) async throws -> GetAccountResponse {
         GetAccountResponse(account: nil, requiresOpenaiAuth: false)
     }
 
@@ -82,7 +82,8 @@ private final class FakeStartupDiagnosticsClient: @unchecked Sendable, CodexRate
         )
     }
 
-    func loadSnapshot() async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
-        (try await readAccount(), try await readRateLimits())
+    func loadSnapshot(refreshToken: Bool) async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
+        (try await readAccount(refreshToken: refreshToken), try await readRateLimits())
     }
+
 }

@@ -6,8 +6,14 @@ APP_NAME="CodexToolbar"
 SOURCE_APP="$ROOT_DIR/dist/$APP_NAME.app"
 TARGET_DIR="${HOME}/Applications"
 TARGET_APP="$TARGET_DIR/$APP_NAME.app"
+APP_EXECUTABLE="$TARGET_APP/Contents/MacOS/$APP_NAME"
 
 "$ROOT_DIR/scripts/build_app.sh"
+
+if pgrep -f "$APP_EXECUTABLE" >/dev/null 2>&1; then
+  pkill -f "$APP_EXECUTABLE" >/dev/null 2>&1 || true
+  sleep 1
+fi
 
 mkdir -p "$TARGET_DIR"
 rm -rf "$TARGET_APP"

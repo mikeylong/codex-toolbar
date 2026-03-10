@@ -42,8 +42,14 @@ struct GetAccountRateLimitsResponse: Codable, Equatable, Sendable {
     let rateLimits: CodexRateLimitsSnapshot
     let rateLimitsByLimitId: [String: CodexRateLimitsSnapshot]?
 
-    func codexSnapshot() -> CodexRateLimitsSnapshot {
-        if let codexSnapshot = rateLimitsByLimitId?["codex"] {
+    func displaySnapshot() -> CodexRateLimitsSnapshot {
+        if rateLimits.primary != nil || rateLimits.secondary != nil {
+            return rateLimits
+        }
+
+        if let codexSnapshot = rateLimitsByLimitId?["codex"],
+           codexSnapshot.primary != nil || codexSnapshot.secondary != nil
+        {
             return codexSnapshot
         }
 

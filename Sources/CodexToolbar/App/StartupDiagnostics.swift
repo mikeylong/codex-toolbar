@@ -55,6 +55,7 @@ struct StartupDiagnosticsRecord: Codable, Equatable, Sendable {
     let launched: Bool
     let state: String
     let statusMessage: String
+    let debugDetail: String?
     let cardCount: Int
     let statusBarText: String
     let loginItemStatus: String
@@ -65,6 +66,7 @@ struct StartupDiagnosticsRecord: Codable, Equatable, Sendable {
         launched = true
         state = Self.stateString(for: store.state)
         statusMessage = store.statusMessage
+        debugDetail = store.debugDetail
         cardCount = store.cards.count
         statusBarText = store.statusBarText
         self.loginItemStatus = loginItemStatus

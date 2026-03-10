@@ -43,7 +43,31 @@ open -n "$TARGET_APP"
 elapsed=0
 while (( elapsed < TIMEOUT_SECONDS )); do
   if [[ -f "$DIAGNOSTICS_FILE" ]]; then
-    break
+    if python3 - "$DIAGNOSTICS_FILE" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+state = data.get("state", "")
+status_message = data.get("statusMessage", "")
+card_count = int(data.get("cardCount", 0))
+is_valid = (
+    (state == "ready" and card_count > 0) or
+    (state == "error" and status_message in {
+        "Codex CLI not found.",
+        "Sign in to Codex to view rate limits.",
+        "No rate-limit data available."
+    })
+)
+
+raise SystemExit(0 if is_valid else 1)
+PY
+    then
+      break
+    fi
   fi
 
   sleep 1

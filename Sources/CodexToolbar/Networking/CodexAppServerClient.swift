@@ -4,9 +4,9 @@ protocol CodexRateLimitClient: Sendable {
     func events() -> AsyncStream<CodexAppServerEvent>
     func connect() async throws
     func disconnect() async
-    func readAccount() async throws -> GetAccountResponse
+    func readAccount(refreshToken: Bool) async throws -> GetAccountResponse
     func readRateLimits() async throws -> GetAccountRateLimitsResponse
-    func loadSnapshot() async throws -> (GetAccountResponse, GetAccountRateLimitsResponse)
+    func loadSnapshot(refreshToken: Bool) async throws -> (GetAccountResponse, GetAccountRateLimitsResponse)
 }
 
 enum CodexAppServerEvent: Sendable {
@@ -131,10 +131,10 @@ actor CodexAppServerClient: CodexRateLimitClient {
         finishPendingResponses(with: CodexAppServerError.transportClosed)
     }
 
-    func readAccount() async throws -> GetAccountResponse {
+    func readAccount(refreshToken: Bool) async throws -> GetAccountResponse {
         try await request(
             method: "account/read",
-            params: AccountReadParams(refreshToken: false),
+            params: AccountReadParams(refreshToken: refreshToken),
             responseType: GetAccountResponse.self
         )
     }
@@ -147,7 +147,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
         )
     }
 
-    func loadSnapshot() async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
+    func loadSnapshot(refreshToken: Bool) async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
         let codexPath = try Self.locateCodexCLI()
         let process = Process()
         process.executableURL = URL(fileURLWithPath: codexPath)
@@ -162,11 +162,6 @@ actor CodexAppServerClient: CodexRateLimitClient {
         process.standardError = stderrPipe
 
         try process.run()
-        defer {
-            if process.isRunning {
-                process.terminate()
-            }
-        }
 
         let requests: [Data] = try [
             encoder.encode(JSONRPCRequest(
@@ -178,54 +173,46 @@ actor CodexAppServerClient: CodexRateLimitClient {
                 )
             )),
             encoder.encode(JSONRPCNotification(method: "initialized", params: Optional<JSONNull>.none)),
-            encoder.encode(JSONRPCRequest(id: "2", method: "account/read", params: AccountReadParams(refreshToken: false))),
+            encoder.encode(JSONRPCRequest(id: "2", method: "account/read", params: AccountReadParams(refreshToken: refreshToken))),
             encoder.encode(JSONRPCRequest(id: "3", method: "account/rateLimits/read", params: JSONNull()))
         ]
 
-        for payload in requests {
-            var line = payload
-            line.append(0x0A)
-            try stdinPipe.fileHandleForWriting.write(contentsOf: line)
-        }
+        return try await withCheckedThrowingContinuation { continuation in
+            let collector = SnapshotLoadCollector(
+                process: process,
+                stdoutHandle: stdoutPipe.fileHandleForReading,
+                stderrHandle: stderrPipe.fileHandleForReading,
+                decoder: decoder,
+                continuation: continuation
+            )
 
-        var account: GetAccountResponse?
-        var rateLimits: GetAccountRateLimitsResponse?
-        let deadline = Date().addingTimeInterval(5)
-
-        for try await line in stdoutPipe.fileHandleForReading.bytes.lines {
-            guard let data = String(line).data(using: .utf8) else { continue }
-            guard
-                let jsonObject = try? JSONSerialization.jsonObject(with: data),
-                let message = jsonObject as? [String: Any],
-                let id = message["id"] as? String,
-                let result = message["result"]
-            else {
-                if Date() > deadline { break }
-                continue
+            stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+                collector.appendStdout(handle.availableData)
             }
 
-            let resultData = try JSONSerialization.data(withJSONObject: result)
-
-            switch id {
-            case "2":
-                account = try decoder.decode(GetAccountResponse.self, from: resultData)
-            case "3":
-                rateLimits = try decoder.decode(GetAccountRateLimitsResponse.self, from: resultData)
-            default:
-                break
+            stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+                collector.appendStderr(handle.availableData)
             }
 
-            if let account, let rateLimits {
-                return (account, rateLimits)
+            process.terminationHandler = { terminatedProcess in
+                collector.handleTermination(status: terminatedProcess.terminationStatus)
             }
 
-            if Date() > deadline {
-                break
+            do {
+                for payload in requests {
+                    var line = payload
+                    line.append(0x0A)
+                    try stdinPipe.fileHandleForWriting.write(contentsOf: line)
+                }
+            } catch {
+                collector.handleFailure(error)
+                return
+            }
+
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 5) {
+                collector.handleTimeout()
             }
         }
-
-        let stderr = try? String(decoding: stderrPipe.fileHandleForReading.readToEnd() ?? Data(), as: UTF8.self)
-        throw CodexAppServerError.serverError(stderr?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "Timed out reading Codex rate limits.")
     }
 
     private func sendInitializeHandshake() async throws {
@@ -370,6 +357,11 @@ actor CodexAppServerClient: CodexRateLimitClient {
     }
 
     nonisolated static func codexPathCandidates(environmentPath: String, homeDirectory: String) -> [String] {
+        let preferredAppCandidates = [
+            "/Applications/Codex.app/Contents/Resources/codex",
+            URL(fileURLWithPath: homeDirectory).appendingPathComponent("Applications/Codex.app/Contents/Resources/codex").path
+        ]
+
         let pathCandidates = environmentPath.split(separator: ":").map { pathComponent in
             URL(fileURLWithPath: String(pathComponent)).appendingPathComponent("codex").path
         }
@@ -382,7 +374,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
         ]
 
         var seen = Set<String>()
-        let orderedCandidates = pathCandidates + fallbackCandidates
+        let orderedCandidates = preferredAppCandidates + pathCandidates + fallbackCandidates
 
         return orderedCandidates.filter { candidate in
             seen.insert(candidate).inserted
@@ -393,6 +385,138 @@ actor CodexAppServerClient: CodexRateLimitClient {
 private extension String {
     var nonEmpty: String? {
         isEmpty ? nil : self
+    }
+}
+
+private final class SnapshotLoadCollector: @unchecked Sendable {
+    private let process: Process
+    private let stdoutHandle: FileHandle
+    private let stderrHandle: FileHandle
+    private let decoder: JSONDecoder
+    private let continuation: CheckedContinuation<(GetAccountResponse, GetAccountRateLimitsResponse), Error>
+    private let lock = NSLock()
+
+    private var finished = false
+    private var stdoutBuffer = Data()
+    private var stderrBuffer = Data()
+    private var account: GetAccountResponse?
+    private var rateLimits: GetAccountRateLimitsResponse?
+
+    init(
+        process: Process,
+        stdoutHandle: FileHandle,
+        stderrHandle: FileHandle,
+        decoder: JSONDecoder,
+        continuation: CheckedContinuation<(GetAccountResponse, GetAccountRateLimitsResponse), Error>
+    ) {
+        self.process = process
+        self.stdoutHandle = stdoutHandle
+        self.stderrHandle = stderrHandle
+        self.decoder = decoder
+        self.continuation = continuation
+    }
+
+    func appendStdout(_ data: Data) {
+        guard !data.isEmpty else { return }
+
+        var resolvedAccount: GetAccountResponse?
+        var resolvedRateLimits: GetAccountRateLimitsResponse?
+
+        lock.lock()
+        stdoutBuffer.append(data)
+
+        while let newlineIndex = stdoutBuffer.firstIndex(of: 0x0A) {
+            let line = Data(stdoutBuffer[..<newlineIndex])
+            stdoutBuffer.removeSubrange(...newlineIndex)
+            parseLine(line)
+        }
+
+        resolvedAccount = account
+        resolvedRateLimits = rateLimits
+        lock.unlock()
+
+        if let resolvedAccount, let resolvedRateLimits {
+            finish(.success((resolvedAccount, resolvedRateLimits)))
+        }
+    }
+
+    func appendStderr(_ data: Data) {
+        guard !data.isEmpty else { return }
+        lock.lock()
+        stderrBuffer.append(data)
+        lock.unlock()
+    }
+
+    func handleTermination(status: Int32) {
+        lock.lock()
+        let resolvedAccount = account
+        let resolvedRateLimits = rateLimits
+        let stderrString = String(decoding: stderrBuffer, as: UTF8.self)
+        lock.unlock()
+
+        if let resolvedAccount, let resolvedRateLimits {
+            finish(.success((resolvedAccount, resolvedRateLimits)))
+            return
+        }
+
+        let message = stderrString.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+            ?? "Timed out reading Codex rate limits."
+        let reason = status == 0 ? message : "Codex app-server exited with status \(status). \(message)"
+        finish(.failure(CodexAppServerError.serverError(reason)))
+    }
+
+    func handleTimeout() {
+        lock.lock()
+        let stderrString = String(decoding: stderrBuffer, as: UTF8.self)
+        lock.unlock()
+
+        let message = stderrString.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+            ?? "Timed out reading Codex rate limits."
+        finish(.failure(CodexAppServerError.serverError(message)))
+    }
+
+    func handleFailure(_ error: Error) {
+        finish(.failure(error))
+    }
+
+    private func parseLine(_ lineData: Data) {
+        guard
+            let jsonObject = try? JSONSerialization.jsonObject(with: lineData),
+            let message = jsonObject as? [String: Any],
+            let id = message["id"] as? String,
+            let result = message["result"],
+            let resultData = try? JSONSerialization.data(withJSONObject: result)
+        else {
+            return
+        }
+
+        switch id {
+        case "2":
+            account = try? decoder.decode(GetAccountResponse.self, from: resultData)
+        case "3":
+            rateLimits = try? decoder.decode(GetAccountRateLimitsResponse.self, from: resultData)
+        default:
+            break
+        }
+    }
+
+    private func finish(_ result: Result<(GetAccountResponse, GetAccountRateLimitsResponse), Error>) {
+        lock.lock()
+        guard !finished else {
+            lock.unlock()
+            return
+        }
+        finished = true
+        lock.unlock()
+
+        stdoutHandle.readabilityHandler = nil
+        stderrHandle.readabilityHandler = nil
+
+        if process.isRunning {
+            process.terminate()
+        }
+
+        continuation.resume(with: result)
     }
 }
 

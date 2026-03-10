@@ -6,12 +6,6 @@ import SwiftUI
 struct CodexToolbarApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-    init() {
-        Task {
-            await RateLimitStore.shared.start()
-        }
-    }
-
     var body: some Scene {
         Settings {
             EmptyView()
@@ -36,6 +30,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configurePopover()
         observeState()
         updateStatusItem()
+        Task {
+            await store.start()
+        }
         maybeReportStartupDiagnostics()
         scheduleScreenshotCaptureIfNeeded()
     }
@@ -104,15 +101,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             loginItemStatus: loginItemController.statusMessage
         )
 
-        guard record.isValidFirstRunState else {
-            return
-        }
-
         do {
             let reporter = StartupDiagnosticsReporter(configuration: startupDiagnosticsConfiguration)
             try reporter.report(store: store, loginItemStatus: loginItemController.statusMessage)
         } catch {
             fputs("Startup diagnostics failed: \(error.localizedDescription)\n", stderr)
+        }
+
+        guard record.isValidFirstRunState else {
+            return
         }
 
         startupDiagnosticsDidFinish = true

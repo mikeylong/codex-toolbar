@@ -9,10 +9,21 @@ struct StatusMenuContentView: View {
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.primary)
 
+            if let staleMessage = store.staleMessage, !store.cards.isEmpty {
+                Label(staleMessage, systemImage: "exclamationmark.triangle.fill")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+            }
+
             if store.cards.isEmpty {
                 Text(store.statusMessage)
                     .font(.body)
                     .foregroundStyle(.primary)
+                if let debugDetail = store.debugDetail {
+                    Text(debugDetail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(store.cards.enumerated()), id: \.offset) { index, card in
@@ -24,6 +35,12 @@ struct StatusMenuContentView: View {
                         }
                     }
                 }
+            }
+
+            if let debugDetail = store.debugDetail, !store.cards.isEmpty, store.state != .ready {
+                Text(debugDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             if let lastUpdated = store.lastUpdated, !store.cards.isEmpty {

@@ -42,16 +42,19 @@ final class ScreenshotScenarioTests: XCTestCase {
 
 private final class FakeScreenshotClient: @unchecked Sendable, CodexRateLimitClient {
     private(set) var loadSnapshotCallCount = 0
+    private(set) var connectCallCount = 0
 
     func events() -> AsyncStream<CodexAppServerEvent> {
         AsyncStream { _ in }
     }
 
-    func connect() async throws {}
+    func connect() async throws {
+        connectCallCount += 1
+    }
 
     func disconnect() async {}
 
-    func readAccount() async throws -> GetAccountResponse {
+    func readAccount(refreshToken: Bool) async throws -> GetAccountResponse {
         GetAccountResponse(account: nil, requiresOpenaiAuth: false)
     }
 
@@ -69,8 +72,9 @@ private final class FakeScreenshotClient: @unchecked Sendable, CodexRateLimitCli
         )
     }
 
-    func loadSnapshot() async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
+    func loadSnapshot(refreshToken: Bool) async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
         loadSnapshotCallCount += 1
-        return (try await readAccount(), try await readRateLimits())
+        return (try await readAccount(refreshToken: refreshToken), try await readRateLimits())
     }
+
 }

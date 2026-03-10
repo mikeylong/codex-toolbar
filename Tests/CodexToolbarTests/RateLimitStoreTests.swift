@@ -31,11 +31,13 @@ final class RateLimitStoreTests: XCTestCase {
         )
 
         await store.start()
+        XCTAssertEqual(client.connectCallCount, 1)
         XCTAssertEqual(client.loadSnapshotCallCount, 1)
 
         client.emit(.disconnected("Codex app-server exited with status 1."))
         try? await Task.sleep(nanoseconds: 120_000_000)
 
+        XCTAssertEqual(client.connectCallCount, 2)
         XCTAssertEqual(client.loadSnapshotCallCount, 2)
     }
 
@@ -50,8 +52,46 @@ final class RateLimitStoreTests: XCTestCase {
         await store.start()
         try? await Task.sleep(nanoseconds: 140_000_000)
 
+        XCTAssertGreaterThanOrEqual(client.connectCallCount, 1)
         XCTAssertGreaterThanOrEqual(client.loadSnapshotCallCount, 2)
         await store.stop()
+    }
+
+    func testManualRefreshFailurePreservesCardsAndShowsErrorState() async {
+        let client = FakeCodexRateLimitClient()
+        let store = RateLimitStore(
+            client: client,
+            reconnectDelayNanoseconds: 10_000_000_000,
+            refreshDelayNanosecondsProvider: { 10_000_000_000 }
+        )
+
+        await store.start()
+        let initialLastUpdated = store.lastUpdated
+        client.failReadRateLimits = CodexAppServerError.transportClosed
+
+        await store.refreshNow()
+
+        XCTAssertEqual(store.state, .error("Codex app-server connection closed."))
+        XCTAssertFalse(store.cards.isEmpty)
+        XCTAssertEqual(store.staleMessage, "Codex app-server connection closed.")
+        XCTAssertEqual(store.statusBarText, "!")
+        XCTAssertEqual(store.lastUpdated, initialLastUpdated)
+    }
+
+    func testManualRefreshRequestsTokenRefresh() async {
+        let client = FakeCodexRateLimitClient()
+        let store = RateLimitStore(
+            client: client,
+            reconnectDelayNanoseconds: 10_000_000_000,
+            refreshDelayNanosecondsProvider: { 10_000_000_000 }
+        )
+
+        await store.start()
+        let refreshTokensBeforeManualRefresh = client.readAccountRefreshTokens.count
+
+        await store.refreshNow()
+
+        XCTAssertEqual(Array(client.readAccountRefreshTokens.dropFirst(refreshTokensBeforeManualRefresh)), [true])
     }
 
     func testDefaultRefreshDelayAlignsToNextMinuteBoundary() {
@@ -82,23 +122,38 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
 
     private(set) var connectCallCount = 0
     private(set) var loadSnapshotCallCount = 0
+    private(set) var readRateLimitsCallCount = 0
+    private(set) var readAccountRefreshTokens: [Bool] = []
+    var failReadRateLimits: Error?
+    private var isConnected = false
 
     func events() -> AsyncStream<CodexAppServerEvent> {
         stream
     }
 
     func connect() async throws {
+        guard !isConnected else { return }
+        isConnected = true
         connectCallCount += 1
     }
 
-    func disconnect() async {}
+    func disconnect() async {
+        isConnected = false
+    }
 
-    func readAccount() async throws -> GetAccountResponse {
-        GetAccountResponse(account: .chatgpt(email: "mike@example.com", planType: .pro), requiresOpenaiAuth: false)
+    func readAccount(refreshToken: Bool) async throws -> GetAccountResponse {
+        readAccountRefreshTokens.append(refreshToken)
+        return GetAccountResponse(account: .chatgpt(email: "mike@example.com", planType: .pro), requiresOpenaiAuth: false)
     }
 
     func readRateLimits() async throws -> GetAccountRateLimitsResponse {
-        GetAccountRateLimitsResponse(
+        readRateLimitsCallCount += 1
+
+        if let failReadRateLimits {
+            throw failReadRateLimits
+        }
+
+        return GetAccountRateLimitsResponse(
             rateLimits: CodexRateLimitsSnapshot(
                 credits: nil,
                 limitId: "codex",
@@ -111,12 +166,15 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
         )
     }
 
-    func loadSnapshot() async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
+    func loadSnapshot(refreshToken: Bool) async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
         loadSnapshotCallCount += 1
-        return (try await readAccount(), try await readRateLimits())
+        return (try await readAccount(refreshToken: refreshToken), try await readRateLimits())
     }
 
     func emit(_ event: CodexAppServerEvent) {
+        if case .disconnected = event {
+            isConnected = false
+        }
         continuation?.yield(event)
     }
 }
