@@ -61,6 +61,8 @@ swift run CodexToolbar
 ./scripts/smoke_test_install.sh
 ```
 
+GitHub Actions runs `swift test` plus the installed-app smoke test on macOS for pull requests and pushes to `main`.
+
 ## Fresh Install Smoke Test
 
 Run this from a clean local macOS user account to validate the documented install flow:

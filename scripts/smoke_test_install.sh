@@ -6,8 +6,9 @@ APP_NAME="CodexToolbar"
 TARGET_DIR="${HOME}/Applications"
 TARGET_APP="$TARGET_DIR/$APP_NAME.app"
 APP_EXECUTABLE="$TARGET_APP/Contents/MacOS/$APP_NAME"
-DIAGNOSTICS_DIR="${TMPDIR:-/tmp}/codex-toolbar-smoke-test"
+DIAGNOSTICS_DIR="${CODEX_TOOLBAR_SMOKE_DIAGNOSTICS_DIR:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/codex-toolbar-smoke-test}"
 DIAGNOSTICS_FILE="$DIAGNOSTICS_DIR/startup.json"
+INSTALL_LOG_FILE="$DIAGNOSTICS_DIR/install.log"
 TIMEOUT_SECONDS="${CODEX_TOOLBAR_SMOKE_TIMEOUT_SECONDS:-15}"
 
 cleanup() {
@@ -22,7 +23,7 @@ rm -rf "$DIAGNOSTICS_DIR"
 mkdir -p "$DIAGNOSTICS_DIR"
 
 rm -rf "$TARGET_APP"
-"$ROOT_DIR/scripts/install_app.sh" >/dev/null
+"$ROOT_DIR/scripts/install_app.sh" >"$INSTALL_LOG_FILE" 2>&1
 
 if [[ ! -d "$TARGET_APP" ]]; then
   echo "Smoke test failed: installed app bundle not found at $TARGET_APP" >&2
@@ -76,6 +77,7 @@ done
 
 if [[ ! -f "$DIAGNOSTICS_FILE" ]]; then
   echo "Smoke test failed: no startup diagnostics written within ${TIMEOUT_SECONDS}s" >&2
+  echo "Diagnostics directory: $DIAGNOSTICS_DIR" >&2
   exit 1
 fi
 
@@ -101,11 +103,13 @@ is_valid = (
 
 if not data.get("launched", False):
     print("Smoke test failed: app did not report launched=true", file=sys.stderr)
+    print(f"Diagnostics directory: {path.rsplit('/', 1)[0]}", file=sys.stderr)
     sys.exit(1)
 
 if not is_valid:
     print("Smoke test failed: invalid first-run state", file=sys.stderr)
     print(json.dumps(data, indent=2, sort_keys=True), file=sys.stderr)
+    print(f"Diagnostics directory: {path.rsplit('/', 1)[0]}", file=sys.stderr)
     sys.exit(1)
 
 print("Smoke test passed.")
