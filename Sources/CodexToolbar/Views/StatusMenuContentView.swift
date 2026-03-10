@@ -19,11 +19,6 @@ struct StatusMenuContentView: View {
                 Text(store.statusMessage)
                     .font(.body)
                     .foregroundStyle(.primary)
-                if let debugDetail = store.debugDetail {
-                    Text(debugDetail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(store.cards.enumerated()), id: \.offset) { index, card in
@@ -37,17 +32,19 @@ struct StatusMenuContentView: View {
                 }
             }
 
-            if let debugDetail = store.debugDetail, !store.cards.isEmpty, store.state != .ready {
-                Text(debugDetail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             if let lastUpdated = store.lastUpdated, !store.cards.isEmpty {
                 Divider()
-                Text(RateLimitFormatter.updatedFooterText(for: lastUpdated))
-                    .font(.body)
-                    .foregroundStyle(.primary)
+                HStack(spacing: 8) {
+                    Text(RateLimitFormatter.updatedFooterText(for: lastUpdated))
+                        .font(.body)
+                        .foregroundStyle(.primary)
+
+                    if store.state == .connecting {
+                        ProgressView()
+                            .controlSize(.small)
+                            .scaleEffect(0.75)
+                    }
+                }
             }
         }
         .padding(16)
