@@ -32,9 +32,9 @@ struct StatusMenuContentView: View {
                 }
             }
 
-            if let lastUpdated = store.lastUpdated, !store.cards.isEmpty {
-                Divider()
-                HStack(spacing: 8) {
+            Divider()
+            HStack(spacing: 8) {
+                if let lastUpdated = store.lastUpdated, !store.cards.isEmpty {
                     Text(RateLimitFormatter.updatedFooterText(for: lastUpdated))
                         .font(.body)
                         .foregroundStyle(.primary)
@@ -45,10 +45,25 @@ struct StatusMenuContentView: View {
                             .scaleEffect(0.75)
                     }
                 }
+
+                Spacer(minLength: 0)
+
+                Text("v\(appVersion)")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(16)
         .frame(width: 352, alignment: .leading)
+    }
+
+    private var appVersion: String {
+        if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+           !version.isEmpty {
+            return version
+        }
+
+        return "0.1.0"
     }
 }
 
