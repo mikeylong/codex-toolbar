@@ -76,14 +76,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateStatusItem() {
         guard let button = statusItem?.button else { return }
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
-            .foregroundColor: NSColor.labelColor
-        ]
         button.image = Self.statusItemImage()
         button.imagePosition = .imageLeading
         button.imageScaling = .scaleProportionallyDown
-        button.attributedTitle = NSAttributedString(string: store.statusBarText, attributes: attributes)
+        button.title = store.statusBarText
         button.setAccessibilityLabel("Codex toolbar, \(store.statusBarText)")
         button.sizeToFit()
     }
@@ -194,14 +190,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static func statusItemImage() -> NSImage {
         if let image = Bundle.module.image(forResource: "CodexStatusGlyph") {
             image.isTemplate = true
-            image.size = NSSize(width: 21, height: 21)
+            image.size = NSSize(width: 16, height: 16)
             return image
         }
 
         let fallback = NSImage(systemSymbolName: "greaterthan.circle", accessibilityDescription: "Codex")
-            ?? NSImage(size: NSSize(width: 21, height: 21))
+            ?? NSImage(size: NSSize(width: 16, height: 16))
         fallback.isTemplate = true
-        fallback.size = NSSize(width: 21, height: 21)
+        fallback.size = NSSize(width: 16, height: 16)
         return fallback
     }
 
