@@ -42,9 +42,9 @@ That quits `CodexToolbar` if it is running and removes `~/Applications/CodexTool
 
 ## Screenshots
 
-| Normal | Warning | Critical |
-| --- | --- | --- |
-| ![Normal status popover](screenshots/normal-light-popover.png) | ![Warning status popover](screenshots/warning-light-popover.png) | ![Critical status popover](screenshots/critical-light-popover.png) |
+| Normal | Warning | Critical | Multiweek |
+| --- | --- | --- | --- |
+| ![Normal status popover](screenshots/normal-light-popover.png) | ![Warning status popover](screenshots/warning-light-popover.png) | ![Critical status popover](screenshots/critical-light-popover.png) | ![Multiweek status popover](screenshots/multiweek-light-popover.png) |
 
 ## Notes
 

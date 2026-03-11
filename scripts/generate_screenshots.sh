@@ -25,7 +25,7 @@ run_capture() {
 }
 
 for appearance in light dark; do
-  for scenario in normal warning critical exhausted; do
+  for scenario in normal warning critical exhausted multiweek; do
     capture_status_item="false"
 
     if [[ "$scenario" == "normal" && "$appearance" == "light" ]]; then
