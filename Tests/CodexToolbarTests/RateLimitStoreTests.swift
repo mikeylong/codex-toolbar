@@ -20,7 +20,7 @@ final class RateLimitStoreTests: XCTestCase {
         XCTAssertTrue(cards[0].isPrimary)
         XCTAssertFalse(cards[1].isPrimary)
         XCTAssertEqual(cards[0].compactLabel, "2 Week")
-        XCTAssertEqual(cards[0].title, "Rolling 2-week window")
+        XCTAssertEqual(cards[0].title, "2 Week")
     }
 
     func testMakeCardsKeepsNonCodexWeeklyBucketsAsWeekly() {

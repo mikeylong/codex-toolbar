@@ -22,8 +22,7 @@ enum RateLimitFormatter {
         case let value where value % 10080 == 0:
             return "\(value / 10080) Week"
         case let value where value % 1440 == 0:
-            let days = value / 1440
-            return days == 1 ? "1d" : "\(days)d"
+            return "\(value / 1440) Day"
         case let value where value % 60 == 0:
             return "\(value / 60)h"
         default:
@@ -36,23 +35,7 @@ enum RateLimitFormatter {
             return "Rate limit window"
         }
 
-        let normalizedMinutes = normalizedWindowMinutes(minutes)
-
-        switch normalizedMinutes {
-        case 300:
-            return "Rolling 5-hour window"
-        case 10080:
-            return "Weekly"
-        case let value where value % 10080 == 0:
-            return "Rolling \(value / 10080)-week window"
-        case let value where value % 1440 == 0:
-            let days = value / 1440
-            return days == 1 ? "Daily" : "Rolling \(days)-day window"
-        case let value where value % 60 == 0:
-            return "Rolling \(value / 60)-hour window"
-        default:
-            return "Rolling \(normalizedMinutes)-minute window"
-        }
+        return compactWindowLabel(for: minutes)
     }
 
     static func absoluteResetText(

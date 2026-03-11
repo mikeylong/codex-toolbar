@@ -16,7 +16,7 @@ final class ScreenshotScenarioTests: XCTestCase {
         )
 
         XCTAssertEqual(cards.count, 2)
-        XCTAssertEqual(cards[0].title, "Rolling 5-hour window")
+        XCTAssertEqual(cards[0].title, "5h")
         XCTAssertEqual(cards[0].progressState, .warning)
         XCTAssertEqual(cards[0].usageText, "74% used · 26% remaining")
         XCTAssertEqual(cards[0].combinedResetText, "Resets in 35m (2:46 PM)")
@@ -52,7 +52,7 @@ final class ScreenshotScenarioTests: XCTestCase {
         XCTAssertEqual(client.loadSnapshotCallCount, 0)
         XCTAssertEqual(store.state, .ready)
         XCTAssertEqual(store.cards.first?.compactLabel, "2 Week")
-        XCTAssertEqual(store.cards.first?.title, "Rolling 2-week window")
+        XCTAssertEqual(store.cards.first?.title, "2 Week")
         XCTAssertEqual(store.statusBarText, "1% 2 Week")
         XCTAssertEqual(store.lastUpdated, ScreenshotScenario.multiweek.lastUpdated)
     }

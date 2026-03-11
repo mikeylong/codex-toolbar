@@ -5,7 +5,7 @@ import XCTest
 final class RateLimitFormatterTests: XCTestCase {
     func testFiveHourWindowLabel() {
         XCTAssertEqual(RateLimitFormatter.compactWindowLabel(for: 300), "5h")
-        XCTAssertEqual(RateLimitFormatter.windowTitle(for: 300), "Rolling 5-hour window")
+        XCTAssertEqual(RateLimitFormatter.windowTitle(for: 300), "5h")
     }
 
     func testWeeklyWindowLabelUsesCanonicalAndOffByOneDuration() {
@@ -17,14 +17,19 @@ final class RateLimitFormatterTests: XCTestCase {
 
     func testTwoWeekWindowLabelUsesCanonicalAndOffByOneDuration() {
         XCTAssertEqual(RateLimitFormatter.compactWindowLabel(for: 20160), "2 Week")
-        XCTAssertEqual(RateLimitFormatter.windowTitle(for: 20160), "Rolling 2-week window")
+        XCTAssertEqual(RateLimitFormatter.windowTitle(for: 20160), "2 Week")
         XCTAssertEqual(RateLimitFormatter.compactWindowLabel(for: 20161), "2 Week")
-        XCTAssertEqual(RateLimitFormatter.windowTitle(for: 20161), "Rolling 2-week window")
+        XCTAssertEqual(RateLimitFormatter.windowTitle(for: 20161), "2 Week")
+    }
+
+    func testDayWindowLabelUsesWordFallback() {
+        XCTAssertEqual(RateLimitFormatter.compactWindowLabel(for: 4320), "3 Day")
+        XCTAssertEqual(RateLimitFormatter.windowTitle(for: 4320), "3 Day")
     }
 
     func testNonNormalizedWindowFallsBackToMinuteLabel() {
         XCTAssertEqual(RateLimitFormatter.compactWindowLabel(for: 20162), "20162m")
-        XCTAssertEqual(RateLimitFormatter.windowTitle(for: 20162), "Rolling 20162-minute window")
+        XCTAssertEqual(RateLimitFormatter.windowTitle(for: 20162), "20162m")
     }
 
     func testRemainingPercentUsesInverseOfUsedPercent() {
