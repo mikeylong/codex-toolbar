@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SCREENSHOTS_DIR="$ROOT_DIR/screenshots"
 APP_EXECUTABLE="$ROOT_DIR/dist/CodexToolbar.app/Contents/MacOS/CodexToolbar"
+README_SCENARIOS=(normal warning critical)
 
 "$ROOT_DIR/scripts/build_app.sh" >/dev/null
 
@@ -25,7 +26,7 @@ run_capture() {
 }
 
 for appearance in light dark; do
-  for scenario in normal warning critical exhausted multiweek; do
+  for scenario in "${README_SCENARIOS[@]}"; do
     capture_status_item="false"
 
     if [[ "$scenario" == "normal" && "$appearance" == "light" ]]; then
@@ -38,6 +39,11 @@ for appearance in light dark; do
 
     run_capture "$scenario" "$appearance" "$capture_status_item"
   done
+done
+
+for scenario in "${README_SCENARIOS[@]}"; do
+  cp "$SCREENSHOTS_DIR/$scenario-light-popover.png" \
+    "$SCREENSHOTS_DIR/readme-$scenario-light-popover.png"
 done
 
 echo "Generated screenshots:"
