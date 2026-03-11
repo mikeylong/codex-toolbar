@@ -30,6 +30,16 @@ final class RateLimitCardViewDataTests: XCTestCase {
         XCTAssertEqual(card.usageText, "90% used · 10% remaining")
     }
 
+    func testDisplayLabelOverrideDrivesTitleAndCompactLabel() {
+        let card = RateLimitCardViewData(
+            window: makeWindow(usedPercent: 16, durationMinutes: 20160),
+            displayLabelOverride: "Weekly"
+        )
+
+        XCTAssertEqual(card.title, "Weekly")
+        XCTAssertEqual(card.compactLabel, "Weekly")
+    }
+
     private func makeWindow(usedPercent: Int, durationMinutes: Int) -> CodexRateLimitWindow {
         CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: usedPercent, windowDurationMins: durationMinutes)
     }

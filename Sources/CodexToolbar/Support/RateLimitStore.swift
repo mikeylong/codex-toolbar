@@ -247,8 +247,7 @@ final class RateLimitStore {
         return sorted.enumerated().map { index, entry in
             RateLimitCardViewData(
                 window: entry.window,
-                displayWindowDurationMins: displayWindowDurationMins(
-                    for: entry.window,
+                displayLabelOverride: displayLabelOverride(
                     role: entry.role,
                     snapshot: snapshot
                 ),
@@ -261,23 +260,20 @@ final class RateLimitStore {
         }
     }
 
-    private static func displayWindowDurationMins(
-        for window: CodexRateLimitWindow,
+    private static func displayLabelOverride(
         role: WindowRole,
         snapshot: CodexRateLimitsSnapshot
-    ) -> Int? {
-        guard
-            role == .secondary,
-            snapshot.limitId == "codex",
-            let windowDurationMins = window.windowDurationMins,
-            RateLimitFormatter.normalizedWindowMinutes(windowDurationMins) == 10080
-        else {
-            return window.windowDurationMins
+    ) -> String? {
+        guard snapshot.limitId == "codex" else {
+            return nil
         }
 
-        // Codex UI labels the core secondary bucket as a 2-week window even
-        // when the current payload still reports a week-ish duration.
-        return 20160
+        switch role {
+        case .primary:
+            return "5h"
+        case .secondary:
+            return "Weekly"
+        }
     }
 
     static func makeShared(

@@ -11,7 +11,7 @@ final class RateLimitStoreTests: XCTestCase {
             limitName: "Codex",
             planType: .pro,
             primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 88, windowDurationMins: 300),
-            secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 92, windowDurationMins: 10_081)
+            secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 92, windowDurationMins: 10_080)
         )
 
         let cards = RateLimitStore.makeCards(from: snapshot)
@@ -19,15 +19,15 @@ final class RateLimitStoreTests: XCTestCase {
         XCTAssertEqual(cards.map(\.usedPercent), [92, 88])
         XCTAssertTrue(cards[0].isPrimary)
         XCTAssertFalse(cards[1].isPrimary)
-        XCTAssertEqual(cards[0].compactLabel, "2 Week")
-        XCTAssertEqual(cards[0].title, "2 Week")
+        XCTAssertEqual(cards[0].compactLabel, "Weekly")
+        XCTAssertEqual(cards[0].title, "Weekly")
     }
 
-    func testMakeCardsKeepsNonCodexWeeklyBucketsAsWeekly() {
+    func testMakeCardsUsesWeeklyForOffByOneCoreCodexSecondaryBucket() {
         let snapshot = CodexRateLimitsSnapshot(
             credits: nil,
-            limitId: "codex_bengalfox",
-            limitName: "GPT-5.3-Codex-Spark",
+            limitId: "codex",
+            limitName: "Codex",
             planType: .pro,
             primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 12, windowDurationMins: 300),
             secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 41, windowDurationMins: 10_081)
@@ -37,6 +37,22 @@ final class RateLimitStoreTests: XCTestCase {
 
         XCTAssertEqual(cards[0].compactLabel, "Weekly")
         XCTAssertEqual(cards[0].title, "Weekly")
+    }
+
+    func testMakeCardsKeepsNonCodexFormatterLabels() {
+        let snapshot = CodexRateLimitsSnapshot(
+            credits: nil,
+            limitId: "codex_bengalfox",
+            limitName: "GPT-5.3-Codex-Spark",
+            planType: .pro,
+            primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 12, windowDurationMins: 300),
+            secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 41, windowDurationMins: 20_160)
+        )
+
+        let cards = RateLimitStore.makeCards(from: snapshot)
+
+        XCTAssertEqual(cards[0].compactLabel, "2 Week")
+        XCTAssertEqual(cards[0].title, "2 Week")
     }
 
     func testReconnectsAfterDisconnectEvent() async {

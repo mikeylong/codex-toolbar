@@ -154,17 +154,20 @@ struct RateLimitCardViewData: Equatable, Sendable {
 
     init(
         window: CodexRateLimitWindow,
-        displayWindowDurationMins: Int? = nil,
+        displayLabelOverride: String? = nil,
         isPrimary: Bool = false,
         now: Date = Date(),
         calendar: Calendar = .current,
         locale: Locale = .current,
         timeZone: TimeZone = .current
     ) {
-        let displayDurationMins = displayWindowDurationMins ?? window.windowDurationMins
-
-        title = RateLimitFormatter.windowTitle(for: displayDurationMins)
-        compactLabel = RateLimitFormatter.compactWindowLabel(for: displayDurationMins)
+        if let displayLabelOverride {
+            title = displayLabelOverride
+            compactLabel = displayLabelOverride
+        } else {
+            title = RateLimitFormatter.windowTitle(for: window.windowDurationMins)
+            compactLabel = RateLimitFormatter.compactWindowLabel(for: window.windowDurationMins)
+        }
         usedPercent = window.usedPercent
         remainingPercent = RateLimitFormatter.remainingPercent(fromUsedPercent: window.usedPercent)
         usageText = "\(usedPercent)% used · \(remainingPercent)% remaining"
