@@ -1,13 +1,13 @@
 import Foundation
 
-enum RateLimitFormatter {
+package enum RateLimitFormatter {
     private static let normalizationToleranceMinutes = 1
 
-    static func remainingPercent(fromUsedPercent usedPercent: Int) -> Int {
+    package static func remainingPercent(fromUsedPercent usedPercent: Int) -> Int {
         max(0, 100 - usedPercent)
     }
 
-    static func compactWindowLabel(for minutes: Int?) -> String {
+    package static func compactWindowLabel(for minutes: Int?) -> String {
         guard let minutes else {
             return "Limit"
         }
@@ -30,7 +30,7 @@ enum RateLimitFormatter {
         }
     }
 
-    static func windowTitle(for minutes: Int?) -> String {
+    package static func windowTitle(for minutes: Int?) -> String {
         guard let minutes else {
             return "Rate limit window"
         }
@@ -38,7 +38,7 @@ enum RateLimitFormatter {
         return compactWindowLabel(for: minutes)
     }
 
-    static func absoluteResetText(
+    package static func absoluteResetText(
         for date: Date?,
         now: Date = Date(),
         calendar: Calendar = .current,
@@ -64,7 +64,7 @@ enum RateLimitFormatter {
         return formatter.string(from: date)
     }
 
-    static func relativeResetText(
+    package static func relativeResetText(
         for date: Date?,
         now: Date = Date(),
         calendar: Calendar = .current
@@ -92,7 +92,7 @@ enum RateLimitFormatter {
         return "<1m"
     }
 
-    static func combinedResetText(
+    package static func combinedResetText(
         for date: Date?,
         now: Date = Date(),
         calendar: Calendar = .current,
@@ -111,7 +111,7 @@ enum RateLimitFormatter {
         return "Resets \(absolute)"
     }
 
-    static func updatedFooterText(
+    package static func updatedFooterText(
         for date: Date,
         locale: Locale = .current,
         timeZone: TimeZone = .current
@@ -123,7 +123,7 @@ enum RateLimitFormatter {
         return "Updated \(formatter.string(from: date))"
     }
 
-    static func normalizedWindowMinutes(_ minutes: Int) -> Int {
+    package static func normalizedWindowMinutes(_ minutes: Int) -> Int {
         if let normalizedWeeks = snapped(minutes: minutes, unitMinutes: 10080) {
             return normalizedWeeks
         }

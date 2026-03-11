@@ -1,6 +1,6 @@
 import Foundation
 
-enum PlanType: String, Codable, Sendable {
+package enum PlanType: String, Codable, Sendable {
     case free
     case go
     case plus
@@ -12,37 +12,70 @@ enum PlanType: String, Codable, Sendable {
     case unknown
 }
 
-struct CreditsSnapshot: Codable, Equatable, Sendable {
-    let balance: String?
-    let hasCredits: Bool
-    let unlimited: Bool
+package struct CreditsSnapshot: Codable, Equatable, Sendable {
+    package let balance: String?
+    package let hasCredits: Bool
+    package let unlimited: Bool
+
+    package init(balance: String?, hasCredits: Bool, unlimited: Bool) {
+        self.balance = balance
+        self.hasCredits = hasCredits
+        self.unlimited = unlimited
+    }
 }
 
-struct CodexRateLimitWindow: Codable, Equatable, Sendable {
-    let resetsAt: Int64?
-    let usedPercent: Int
-    let windowDurationMins: Int?
+package struct CodexRateLimitWindow: Codable, Equatable, Sendable {
+    package let resetsAt: Int64?
+    package let usedPercent: Int
+    package let windowDurationMins: Int?
 
-    var resetDate: Date? {
+    package init(resetsAt: Int64?, usedPercent: Int, windowDurationMins: Int?) {
+        self.resetsAt = resetsAt
+        self.usedPercent = usedPercent
+        self.windowDurationMins = windowDurationMins
+    }
+
+    package var resetDate: Date? {
         guard let resetsAt else { return nil }
         return Date(timeIntervalSince1970: TimeInterval(resetsAt))
     }
 }
 
-struct CodexRateLimitsSnapshot: Codable, Equatable, Sendable {
-    let credits: CreditsSnapshot?
-    let limitId: String?
-    let limitName: String?
-    let planType: PlanType?
-    let primary: CodexRateLimitWindow?
-    let secondary: CodexRateLimitWindow?
+package struct CodexRateLimitsSnapshot: Codable, Equatable, Sendable {
+    package let credits: CreditsSnapshot?
+    package let limitId: String?
+    package let limitName: String?
+    package let planType: PlanType?
+    package let primary: CodexRateLimitWindow?
+    package let secondary: CodexRateLimitWindow?
+
+    package init(
+        credits: CreditsSnapshot?,
+        limitId: String?,
+        limitName: String?,
+        planType: PlanType?,
+        primary: CodexRateLimitWindow?,
+        secondary: CodexRateLimitWindow?
+    ) {
+        self.credits = credits
+        self.limitId = limitId
+        self.limitName = limitName
+        self.planType = planType
+        self.primary = primary
+        self.secondary = secondary
+    }
 }
 
-struct GetAccountRateLimitsResponse: Codable, Equatable, Sendable {
-    let rateLimits: CodexRateLimitsSnapshot
-    let rateLimitsByLimitId: [String: CodexRateLimitsSnapshot]?
+package struct GetAccountRateLimitsResponse: Codable, Equatable, Sendable {
+    package let rateLimits: CodexRateLimitsSnapshot
+    package let rateLimitsByLimitId: [String: CodexRateLimitsSnapshot]?
 
-    func displaySnapshot() -> CodexRateLimitsSnapshot {
+    package init(rateLimits: CodexRateLimitsSnapshot, rateLimitsByLimitId: [String: CodexRateLimitsSnapshot]?) {
+        self.rateLimits = rateLimits
+        self.rateLimitsByLimitId = rateLimitsByLimitId
+    }
+
+    package func displaySnapshot() -> CodexRateLimitsSnapshot {
         if rateLimits.primary != nil || rateLimits.secondary != nil {
             return rateLimits
         }
@@ -57,27 +90,32 @@ struct GetAccountRateLimitsResponse: Codable, Equatable, Sendable {
     }
 }
 
-struct GetAccountResponse: Codable, Equatable, Sendable {
-    let account: Account?
-    let requiresOpenaiAuth: Bool
+package struct GetAccountResponse: Codable, Equatable, Sendable {
+    package let account: Account?
+    package let requiresOpenaiAuth: Bool
+
+    package init(account: Account?, requiresOpenaiAuth: Bool) {
+        self.account = account
+        self.requiresOpenaiAuth = requiresOpenaiAuth
+    }
 }
 
-enum Account: Codable, Equatable, Sendable {
+package enum Account: Codable, Equatable, Sendable {
     case apiKey
     case chatgpt(email: String, planType: PlanType)
 
-    enum CodingKeys: String, CodingKey {
+    package enum CodingKeys: String, CodingKey {
         case type
         case email
         case planType
     }
 
-    enum AccountType: String, Codable {
+    package enum AccountType: String, Codable {
         case apiKey
         case chatgpt
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         switch try container.decode(AccountType.self, forKey: .type) {
         case .apiKey:
@@ -90,7 +128,7 @@ enum Account: Codable, Equatable, Sendable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .apiKey:
@@ -103,13 +141,13 @@ enum Account: Codable, Equatable, Sendable {
     }
 }
 
-enum RateLimitProgressState: Equatable, Sendable {
+package enum RateLimitProgressState: Equatable, Sendable {
     case normal
     case warning
     case critical
     case exhausted
 
-    init(remainingPercent: Int) {
+    package init(remainingPercent: Int) {
         switch remainingPercent {
         case ...0:
             self = .exhausted
@@ -123,21 +161,21 @@ enum RateLimitProgressState: Equatable, Sendable {
     }
 }
 
-struct RateLimitCardViewData: Equatable, Sendable {
-    let title: String
-    let compactLabel: String
-    let usedPercent: Int
-    let remainingPercent: Int
-    let usageText: String
-    let relativeResetText: String?
-    let absoluteResetText: String
-    let combinedResetText: String
-    let progressState: RateLimitProgressState
-    let isPrimary: Bool
-    let statusMessage: String?
-    let resetDate: Date?
+package struct RateLimitCardViewData: Equatable, Sendable {
+    package let title: String
+    package let compactLabel: String
+    package let usedPercent: Int
+    package let remainingPercent: Int
+    package let usageText: String
+    package let relativeResetText: String?
+    package let absoluteResetText: String
+    package let combinedResetText: String
+    package let progressState: RateLimitProgressState
+    package let isPrimary: Bool
+    package let statusMessage: String?
+    package let resetDate: Date?
 
-    var accessibilityLabel: String {
+    package var accessibilityLabel: String {
         var parts = [
             title,
             "\(usedPercent)% used",
@@ -152,7 +190,7 @@ struct RateLimitCardViewData: Equatable, Sendable {
         return parts.joined(separator: ". ")
     }
 
-    init(
+    package init(
         window: CodexRateLimitWindow,
         displayLabelOverride: String? = nil,
         isPrimary: Bool = false,

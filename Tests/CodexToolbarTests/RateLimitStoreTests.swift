@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import CodexToolbar
+@testable import ToolbarCore
 
 @MainActor
 final class RateLimitStoreTests: XCTestCase {
@@ -59,6 +59,7 @@ final class RateLimitStoreTests: XCTestCase {
         let client = FakeCodexRateLimitClient()
         let store = RateLimitStore(
             client: client,
+            presentation: .testPresentation,
             reconnectDelayNanoseconds: 50_000_000,
             refreshDelayNanosecondsProvider: { 10_000_000_000 }
         )
@@ -83,6 +84,7 @@ final class RateLimitStoreTests: XCTestCase {
         let client = FakeCodexRateLimitClient()
         let store = RateLimitStore(
             client: client,
+            presentation: .testPresentation,
             reconnectDelayNanoseconds: 10_000_000_000,
             refreshDelayNanosecondsProvider: { 50_000_000 }
         )
@@ -99,13 +101,14 @@ final class RateLimitStoreTests: XCTestCase {
         let client = FakeCodexRateLimitClient()
         let store = RateLimitStore(
             client: client,
+            presentation: .testPresentation,
             reconnectDelayNanoseconds: 10_000_000_000,
             refreshDelayNanosecondsProvider: { 10_000_000_000 }
         )
 
         await store.start()
         let initialLastUpdated = store.lastUpdated
-        client.failReadRateLimits = CodexAppServerError.transportClosed
+        client.failReadRateLimits = RateLimitClientError.transportClosed("Codex app-server connection closed.")
 
         await store.refreshNow()
 
@@ -120,6 +123,7 @@ final class RateLimitStoreTests: XCTestCase {
         let client = FakeCodexRateLimitClient()
         let store = RateLimitStore(
             client: client,
+            presentation: .testPresentation,
             reconnectDelayNanoseconds: 10_000_000_000,
             refreshDelayNanosecondsProvider: { 10_000_000_000 }
         )
@@ -173,9 +177,9 @@ final class RateLimitStoreTests: XCTestCase {
     }
 }
 
-private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimitClient {
-    private var continuation: AsyncStream<CodexAppServerEvent>.Continuation?
-    private lazy var stream: AsyncStream<CodexAppServerEvent> = AsyncStream { continuation in
+private final class FakeCodexRateLimitClient: @unchecked Sendable, RateLimitClient {
+    private var continuation: AsyncStream<RateLimitClientEvent>.Continuation?
+    private lazy var stream: AsyncStream<RateLimitClientEvent> = AsyncStream { continuation in
         self.continuation = continuation
     }
 
@@ -186,7 +190,7 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
     var failReadRateLimits: Error?
     private var isConnected = false
 
-    func events() -> AsyncStream<CodexAppServerEvent> {
+    func events() -> AsyncStream<RateLimitClientEvent> {
         stream
     }
 
@@ -230,7 +234,7 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
         return (try await readAccount(refreshToken: refreshToken), try await readRateLimits())
     }
 
-    func emit(_ event: CodexAppServerEvent) {
+    func emit(_ event: RateLimitClientEvent) {
         if case .disconnected = event {
             isConnected = false
         }

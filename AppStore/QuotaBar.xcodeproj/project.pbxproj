@@ -1,0 +1,568 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0530CA133BE8E87084F77E37 /* RateLimitClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72A26D784264D49D3EF7F468 /* RateLimitClient.swift */; };
+		099C66EB8C151224CDB0202D /* QuotaBarStatusGlyph.png in Resources */ = {isa = PBXBuildFile; fileRef = FE948D9C3B935D48B9EA1581 /* QuotaBarStatusGlyph.png */; };
+		109280FA84062FEA20EF5F55 /* ServiceManagement.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 920718D689EE01591F896464 /* ServiceManagement.framework */; };
+		1DD9353FBE23B7A949B9FBA5 /* CodexRateLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87A04466BDEEE876B898A0E0 /* CodexRateLimits.swift */; };
+		2206B704BC84DC87712A1A52 /* StatusMenuContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D15FB3AFC747031196B2D77 /* StatusMenuContentView.swift */; };
+		348B15A91B756CB44B6F6B8A /* libToolbarCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 35A9ADF05C5B693D8674FBDE /* libToolbarCore.a */; };
+		44BAE3751C280D7CBC2AC1EA /* QuotaBarRateLimitClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D82AD712A2022E14B4C8D8 /* QuotaBarRateLimitClient.swift */; };
+		48270252B11C5A92DE799F54 /* ServiceManagement.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 920718D689EE01591F896464 /* ServiceManagement.framework */; };
+		6D8A535407479E0E31386139 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 09728AF5BFD3BCFE5832CBF1 /* Cocoa.framework */; };
+		6FD691A5B7D95A6BB581DB93 /* QuotaBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D499ABBA3E402CC337F222B1 /* QuotaBarApp.swift */; };
+		767536BB3DA8F93BCFF4A21A /* StartupDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8098046E62F8059A3F66859 /* StartupDiagnostics.swift */; };
+		7E27213F2E4DA006B24ED5C7 /* QuotaBarReviewDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF8715353804E8AD21D068C3 /* QuotaBarReviewDemo.swift */; };
+		84AC7C58C46BF7E011B70351 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D25BA9D46036BB412C6CD849 /* SwiftUI.framework */; };
+		8894F3EA72A72C51B3F33CB1 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 09728AF5BFD3BCFE5832CBF1 /* Cocoa.framework */; };
+		8B40136C13D2ABC68D601770 /* RateLimitStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3D1AD9F0CBCE34697FC1F12 /* RateLimitStore.swift */; };
+		9185AB36BA5E1EB3A6D6D34F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4F074FD1CAA2B40D7D7A3DD6 /* PrivacyInfo.xcprivacy */; };
+		9B929AC17684BCB32F322E56 /* RateLimitFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 152FE9E51DB13AABA72AF698 /* RateLimitFormatter.swift */; };
+		CA3311F6CB8BC924FF797FDC /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D25BA9D46036BB412C6CD849 /* SwiftUI.framework */; };
+		CAD979A5413BA26446C2481D /* QuotaBarPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28BDD141BBF455DD3DD66C46 /* QuotaBarPresentation.swift */; };
+		E5B38DF2F1C418DAF9537F7B /* ToolbarPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8AF2E0909D6C590BB5D17A8 /* ToolbarPresentation.swift */; };
+		EA5B9F41511EE8AF7025F4DC /* LoginItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C05BCECCDF1454D68567B18 /* LoginItemController.swift */; };
+		FDBA7F25460C249F468885F7 /* ScreenshotScenario.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFB1CCE0583014D3AD46FA7E /* ScreenshotScenario.swift */; };
+		FE3FE3AFA64AB5FEB890AE1C /* QuotaBarReleaseGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25F34FD9C6217AF7217722AC /* QuotaBarReleaseGate.swift */; };
+		FEA3CE309ED7A965C1C0140C /* QuotaBar.icns in Resources */ = {isa = PBXBuildFile; fileRef = E671B6C212EEED04A21D6819 /* QuotaBar.icns */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		2B1FD3B4B9CDF5F5DDD57616 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97D9769FDCDB2D77AFE6AB7A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = ABED186767398284D441565F;
+			remoteInfo = ToolbarCore;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		09728AF5BFD3BCFE5832CBF1 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
+		09D82AD712A2022E14B4C8D8 /* QuotaBarRateLimitClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotaBarRateLimitClient.swift; path = ../Sources/QuotaBar/QuotaBarRateLimitClient.swift; sourceTree = "<group>"; };
+		152FE9E51DB13AABA72AF698 /* RateLimitFormatter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RateLimitFormatter.swift; path = ../Sources/CodexToolbar/Support/RateLimitFormatter.swift; sourceTree = "<group>"; };
+		25F34FD9C6217AF7217722AC /* QuotaBarReleaseGate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotaBarReleaseGate.swift; path = ../Sources/QuotaBar/QuotaBarReleaseGate.swift; sourceTree = "<group>"; };
+		26C80C26573AB0A363CACA11 /* QuotaBar-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = "QuotaBar-Info.plist"; path = "Config/QuotaBar-Info.plist"; sourceTree = "<group>"; };
+		28BDD141BBF455DD3DD66C46 /* QuotaBarPresentation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotaBarPresentation.swift; path = ../Sources/QuotaBar/QuotaBarPresentation.swift; sourceTree = "<group>"; };
+		28E8BBCE8C00BDCCE3E1DC76 /* QuotaBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QuotaBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		35A9ADF05C5B693D8674FBDE /* libToolbarCore.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libToolbarCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		40E88D4C943B1C635947D24A /* index.html */ = {isa = PBXFileReference; includeInIndex = 1; name = index.html; path = site/index.html; sourceTree = "<group>"; };
+		4C05BCECCDF1454D68567B18 /* LoginItemController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LoginItemController.swift; path = ../Sources/CodexToolbar/Support/LoginItemController.swift; sourceTree = "<group>"; };
+		4F074FD1CAA2B40D7D7A3DD6 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Resources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		6D15FB3AFC747031196B2D77 /* StatusMenuContentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StatusMenuContentView.swift; path = ../Sources/CodexToolbar/Views/StatusMenuContentView.swift; sourceTree = "<group>"; };
+		72A26D784264D49D3EF7F468 /* RateLimitClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RateLimitClient.swift; path = ../Sources/CodexToolbar/Support/RateLimitClient.swift; sourceTree = "<group>"; };
+		87A04466BDEEE876B898A0E0 /* CodexRateLimits.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CodexRateLimits.swift; path = ../Sources/CodexToolbar/Models/CodexRateLimits.swift; sourceTree = "<group>"; };
+		920718D689EE01591F896464 /* ServiceManagement.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ServiceManagement.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/ServiceManagement.framework; sourceTree = DEVELOPER_DIR; };
+		C8AF2E0909D6C590BB5D17A8 /* ToolbarPresentation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ToolbarPresentation.swift; path = ../Sources/CodexToolbar/Support/ToolbarPresentation.swift; sourceTree = "<group>"; };
+		D25BA9D46036BB412C6CD849 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/SwiftUI.framework; sourceTree = DEVELOPER_DIR; };
+		D499ABBA3E402CC337F222B1 /* QuotaBarApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotaBarApp.swift; path = ../Sources/QuotaBar/QuotaBarApp.swift; sourceTree = "<group>"; };
+		E671B6C212EEED04A21D6819 /* QuotaBar.icns */ = {isa = PBXFileReference; includeInIndex = 1; name = QuotaBar.icns; path = Resources/QuotaBar.icns; sourceTree = "<group>"; };
+		E8098046E62F8059A3F66859 /* StartupDiagnostics.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StartupDiagnostics.swift; path = ../Sources/CodexToolbar/App/StartupDiagnostics.swift; sourceTree = "<group>"; };
+		EB0FD2D20FEC6CF5B0A151B3 /* privacy.html */ = {isa = PBXFileReference; includeInIndex = 1; name = privacy.html; path = site/privacy.html; sourceTree = "<group>"; };
+		EF8715353804E8AD21D068C3 /* QuotaBarReviewDemo.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotaBarReviewDemo.swift; path = ../Sources/QuotaBar/QuotaBarReviewDemo.swift; sourceTree = "<group>"; };
+		EFB1CCE0583014D3AD46FA7E /* ScreenshotScenario.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ScreenshotScenario.swift; path = ../Sources/CodexToolbar/App/ScreenshotScenario.swift; sourceTree = "<group>"; };
+		F3D1AD9F0CBCE34697FC1F12 /* RateLimitStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RateLimitStore.swift; path = ../Sources/CodexToolbar/Support/RateLimitStore.swift; sourceTree = "<group>"; };
+		F4BDC2C6ADB6D31DE153B51D /* QuotaBar.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = QuotaBar.entitlements; path = Config/QuotaBar.entitlements; sourceTree = "<group>"; };
+		FE948D9C3B935D48B9EA1581 /* QuotaBarStatusGlyph.png */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = image.png; name = QuotaBarStatusGlyph.png; path = ../Sources/QuotaBar/Resources/QuotaBarStatusGlyph.png; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1F44887DAF9B2C1CFEB2B3E5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6D8A535407479E0E31386139 /* Cocoa.framework in Frameworks */,
+				CA3311F6CB8BC924FF797FDC /* SwiftUI.framework in Frameworks */,
+				48270252B11C5A92DE799F54 /* ServiceManagement.framework in Frameworks */,
+				348B15A91B756CB44B6F6B8A /* libToolbarCore.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		596E555857B2983C0E4F9A6E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8894F3EA72A72C51B3F33CB1 /* Cocoa.framework in Frameworks */,
+				84AC7C58C46BF7E011B70351 /* SwiftUI.framework in Frameworks */,
+				109280FA84062FEA20EF5F55 /* ServiceManagement.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		101BE6BE0CA7C9F2193A1849 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				3F5164ABC29DDCD260AD9592 /* ToolbarCore */,
+				E5E438617D0F56ADCAF9016B /* QuotaBar */,
+			);
+			name = Sources;
+			sourceTree = "<group>";
+		};
+		1C74686B3E3765A882BAADA3 /* Site */ = {
+			isa = PBXGroup;
+			children = (
+				40E88D4C943B1C635947D24A /* index.html */,
+				EB0FD2D20FEC6CF5B0A151B3 /* privacy.html */,
+			);
+			name = Site;
+			sourceTree = "<group>";
+		};
+		2BE049A48F589B1BEED5DC1E = {
+			isa = PBXGroup;
+			children = (
+				D95FAEC7D5D0A3FBE5385498 /* Products */,
+				8FB60C3F01C1BAE1F00581F4 /* Frameworks */,
+				101BE6BE0CA7C9F2193A1849 /* Sources */,
+				5A6F1FC33DC78DC02CD0E74F /* Resources */,
+				5E234D9C93925364CBE6B8E4 /* Config */,
+				1C74686B3E3765A882BAADA3 /* Site */,
+			);
+			sourceTree = "<group>";
+		};
+		3F5164ABC29DDCD260AD9592 /* ToolbarCore */ = {
+			isa = PBXGroup;
+			children = (
+				EFB1CCE0583014D3AD46FA7E /* ScreenshotScenario.swift */,
+				E8098046E62F8059A3F66859 /* StartupDiagnostics.swift */,
+				87A04466BDEEE876B898A0E0 /* CodexRateLimits.swift */,
+				4C05BCECCDF1454D68567B18 /* LoginItemController.swift */,
+				72A26D784264D49D3EF7F468 /* RateLimitClient.swift */,
+				152FE9E51DB13AABA72AF698 /* RateLimitFormatter.swift */,
+				F3D1AD9F0CBCE34697FC1F12 /* RateLimitStore.swift */,
+				C8AF2E0909D6C590BB5D17A8 /* ToolbarPresentation.swift */,
+				6D15FB3AFC747031196B2D77 /* StatusMenuContentView.swift */,
+			);
+			name = ToolbarCore;
+			sourceTree = "<group>";
+		};
+		5A6F1FC33DC78DC02CD0E74F /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				FE948D9C3B935D48B9EA1581 /* QuotaBarStatusGlyph.png */,
+				E671B6C212EEED04A21D6819 /* QuotaBar.icns */,
+				4F074FD1CAA2B40D7D7A3DD6 /* PrivacyInfo.xcprivacy */,
+			);
+			name = Resources;
+			sourceTree = "<group>";
+		};
+		5E234D9C93925364CBE6B8E4 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				26C80C26573AB0A363CACA11 /* QuotaBar-Info.plist */,
+				F4BDC2C6ADB6D31DE153B51D /* QuotaBar.entitlements */,
+			);
+			name = Config;
+			sourceTree = "<group>";
+		};
+		8FB60C3F01C1BAE1F00581F4 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				93C4CAB6491E453BC0B76987 /* OS X */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		93C4CAB6491E453BC0B76987 /* OS X */ = {
+			isa = PBXGroup;
+			children = (
+				09728AF5BFD3BCFE5832CBF1 /* Cocoa.framework */,
+				D25BA9D46036BB412C6CD849 /* SwiftUI.framework */,
+				920718D689EE01591F896464 /* ServiceManagement.framework */,
+			);
+			name = "OS X";
+			sourceTree = "<group>";
+		};
+		D95FAEC7D5D0A3FBE5385498 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				35A9ADF05C5B693D8674FBDE /* libToolbarCore.a */,
+				28E8BBCE8C00BDCCE3E1DC76 /* QuotaBar.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E5E438617D0F56ADCAF9016B /* QuotaBar */ = {
+			isa = PBXGroup;
+			children = (
+				D499ABBA3E402CC337F222B1 /* QuotaBarApp.swift */,
+				28BDD141BBF455DD3DD66C46 /* QuotaBarPresentation.swift */,
+				09D82AD712A2022E14B4C8D8 /* QuotaBarRateLimitClient.swift */,
+				25F34FD9C6217AF7217722AC /* QuotaBarReleaseGate.swift */,
+				EF8715353804E8AD21D068C3 /* QuotaBarReviewDemo.swift */,
+			);
+			name = QuotaBar;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		0066DE8F5CBFDBFAD89EC98F /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		703E6C072178B8BA9D970268 /* QuotaBar */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B348652369C43588C4A5C7B1 /* Build configuration list for PBXNativeTarget "QuotaBar" */;
+			buildPhases = (
+				D47941913DC1F207D9A1A784 /* Sources */,
+				1F44887DAF9B2C1CFEB2B3E5 /* Frameworks */,
+				012EDE3A2C26B4EA7FD27719 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4FFF64BAAFD56632914CBF56 /* PBXTargetDependency */,
+			);
+			name = QuotaBar;
+			productName = QuotaBar;
+			productReference = 28E8BBCE8C00BDCCE3E1DC76 /* QuotaBar.app */;
+			productType = "com.apple.product-type.application";
+		};
+		ABED186767398284D441565F /* ToolbarCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3C72C4DBF25278B26532653C /* Build configuration list for PBXNativeTarget "ToolbarCore" */;
+			buildPhases = (
+				0066DE8F5CBFDBFAD89EC98F /* Headers */,
+				92828125A124DBF3C785148B /* Sources */,
+				596E555857B2983C0E4F9A6E /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ToolbarCore;
+			productName = ToolbarCore;
+			productReference = 35A9ADF05C5B693D8674FBDE /* libToolbarCore.a */;
+			productType = "com.apple.product-type.library.static";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		97D9769FDCDB2D77AFE6AB7A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+			};
+			buildConfigurationList = 5C19FEDCD37BE19B4121AC96 /* Build configuration list for PBXProject "QuotaBar" */;
+			compatibilityVersion = "Xcode 16.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 2BE049A48F589B1BEED5DC1E;
+			minimizedProjectReferenceProxies = 0;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D95FAEC7D5D0A3FBE5385498 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				ABED186767398284D441565F /* ToolbarCore */,
+				703E6C072178B8BA9D970268 /* QuotaBar */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		012EDE3A2C26B4EA7FD27719 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				099C66EB8C151224CDB0202D /* QuotaBarStatusGlyph.png in Resources */,
+				FEA3CE309ED7A965C1C0140C /* QuotaBar.icns in Resources */,
+				9185AB36BA5E1EB3A6D6D34F /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		92828125A124DBF3C785148B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FDBA7F25460C249F468885F7 /* ScreenshotScenario.swift in Sources */,
+				767536BB3DA8F93BCFF4A21A /* StartupDiagnostics.swift in Sources */,
+				1DD9353FBE23B7A949B9FBA5 /* CodexRateLimits.swift in Sources */,
+				EA5B9F41511EE8AF7025F4DC /* LoginItemController.swift in Sources */,
+				0530CA133BE8E87084F77E37 /* RateLimitClient.swift in Sources */,
+				9B929AC17684BCB32F322E56 /* RateLimitFormatter.swift in Sources */,
+				8B40136C13D2ABC68D601770 /* RateLimitStore.swift in Sources */,
+				E5B38DF2F1C418DAF9537F7B /* ToolbarPresentation.swift in Sources */,
+				2206B704BC84DC87712A1A52 /* StatusMenuContentView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D47941913DC1F207D9A1A784 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6FD691A5B7D95A6BB581DB93 /* QuotaBarApp.swift in Sources */,
+				CAD979A5413BA26446C2481D /* QuotaBarPresentation.swift in Sources */,
+				44BAE3751C280D7CBC2AC1EA /* QuotaBarRateLimitClient.swift in Sources */,
+				FE3FE3AFA64AB5FEB890AE1C /* QuotaBarReleaseGate.swift in Sources */,
+				7E27213F2E4DA006B24ED5C7 /* QuotaBarReviewDemo.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		4FFF64BAAFD56632914CBF56 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ToolbarCore;
+			target = ABED186767398284D441565F /* ToolbarCore */;
+			targetProxy = 2B1FD3B4B9CDF5F5DDD57616 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0EE81E7DEB19B9B5074662F9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_ENTITLEMENTS = Config/QuotaBar.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/QuotaBar-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				OTHER_SWIFT_FLAGS = "$(inherited) -package-name CodexToolbar";
+				PRODUCT_BUNDLE_IDENTIFIER = com.mikelong.quotabar;
+				PRODUCT_NAME = QuotaBar;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		2F8AB38DF022E2F47A127CA6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_ENTITLEMENTS = Config/QuotaBar.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/QuotaBar-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				OTHER_SWIFT_FLAGS = "$(inherited) -package-name CodexToolbar";
+				PRODUCT_BUNDLE_IDENTIFIER = com.mikelong.quotabar;
+				PRODUCT_NAME = QuotaBar;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		435A1836041DF557129B2E5F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		8B1BF2F1F26D8728D97663E5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEFINES_MODULE = YES;
+				EXECUTABLE_PREFIX = lib;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_SWIFT_FLAGS = "$(inherited) -package-name CodexToolbar";
+				PRODUCT_NAME = ToolbarCore;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		B111777E653FD643D4BC5503 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		DD873622BF42B3AB854EC9BF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEFINES_MODULE = YES;
+				EXECUTABLE_PREFIX = lib;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_SWIFT_FLAGS = "$(inherited) -package-name CodexToolbar";
+				PRODUCT_NAME = ToolbarCore;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3C72C4DBF25278B26532653C /* Build configuration list for PBXNativeTarget "ToolbarCore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8B1BF2F1F26D8728D97663E5 /* Release */,
+				DD873622BF42B3AB854EC9BF /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5C19FEDCD37BE19B4121AC96 /* Build configuration list for PBXProject "QuotaBar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B111777E653FD643D4BC5503 /* Debug */,
+				435A1836041DF557129B2E5F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B348652369C43588C4A5C7B1 /* Build configuration list for PBXNativeTarget "QuotaBar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2F8AB38DF022E2F47A127CA6 /* Release */,
+				0EE81E7DEB19B9B5074662F9 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 97D9769FDCDB2D77AFE6AB7A /* Project object */;
+}

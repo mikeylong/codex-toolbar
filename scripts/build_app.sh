@@ -10,7 +10,7 @@ MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
 cd "$ROOT_DIR"
-swift build -c release
+swift build -c release --product "$APP_NAME"
 BUILD_DIR="$(swift build -c release --show-bin-path)"
 
 rm -rf "$APP_DIR"
@@ -19,7 +19,7 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$BUILD_DIR/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 cp "$ROOT_DIR/Resources/Info.plist" "$CONTENTS_DIR/Info.plist"
 cp "$ROOT_DIR/Resources/Codex.icns" "$RESOURCES_DIR/Codex.icns"
-find "$BUILD_DIR" -maxdepth 1 -name '*.bundle' -exec cp -R {} "$RESOURCES_DIR/" \;
+find "$BUILD_DIR" -maxdepth 1 -name "*_${APP_NAME}.bundle" -exec cp -R {} "$RESOURCES_DIR/" \;
 
 chmod +x "$MACOS_DIR/$APP_NAME"
 

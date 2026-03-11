@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QuotaBar Support</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #081021;
+      --bg-soft: #101a31;
+      --card: rgba(255,255,255,0.08);
+      --text: #f5efe5;
+      --muted: #b8c1d9;
+      --accent: #f28a45;
+      --border: rgba(255,255,255,0.14);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top right, rgba(242,138,69,0.22), transparent 24rem),
+        linear-gradient(180deg, var(--bg) 0%, #0d1730 100%);
+      color: var(--text);
+    }
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 64px 24px 80px;
+    }
+    .hero {
+      display: grid;
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(2.4rem, 5vw, 4.4rem);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 720px;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin: 32px 0 40px;
+    }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 18px;
+      background: var(--card);
+      backdrop-filter: blur(14px);
+    }
+    .card h2 {
+      margin: 0 0 8px;
+      font-size: 1rem;
+      color: var(--text);
+    }
+    .card p {
+      font-size: 0.95rem;
+    }
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 24px;
+    }
+    .links a {
+      color: var(--bg);
+      background: var(--accent);
+      border-radius: 999px;
+      padding: 10px 16px;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .note {
+      margin-top: 28px;
+      padding: 16px 18px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+    }
+    .gallery {
+      display: grid;
+      gap: 18px;
+      margin-top: 40px;
+    }
+    .gallery img {
+      width: 100%;
+      display: block;
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      box-shadow: 0 24px 70px rgba(0,0,0,0.25);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <p>QuotaBar Support</p>
+      <h1>Usage windows, visible from the menu bar.</h1>
+      <p>QuotaBar is a compact macOS utility for monitoring usage windows, reset timing, and remaining capacity without leaving the menu bar.</p>
+      <p>QuotaBar is an independent macOS utility and is not affiliated with or endorsed by OpenAI.</p>
+    </section>
+
+    <section class="card-grid">
+      <article class="card">
+        <h2>At-a-glance status</h2>
+        <p>The menu bar item always shows the most constrained window first, so the number you care about stays visible.</p>
+      </article>
+      <article class="card">
+        <h2>Clear reset timing</h2>
+        <p>The popover keeps reset timing, remaining percentage, and window labels together in one compact panel.</p>
+      </article>
+      <article class="card">
+        <h2>Review/demo mode</h2>
+        <p>Use the `Demo scenario` submenu to preview deterministic sample data without any live account dependency.</p>
+      </article>
+    </section>
+
+    <section class="links">
+      <a href="./privacy.html">Privacy Policy</a>
+      <a href="https://github.com/mikeylong/codex-toolbar">Source Repository</a>
+    </section>
+
+    <section class="note">
+      <p>Setup: the direct-download build can continue to use the existing Codex CLI integration. The App Store build remains gated until a documented, App-Store-safe live data source is implemented.</p>
+    </section>
+
+    <section class="gallery">
+      <img src="../screenshots/01-at-a-glance-menu-bar-status.png" alt="QuotaBar App Store screenshot: At-a-glance menu bar status">
+      <img src="../screenshots/02-live-window-breakdown.png" alt="QuotaBar App Store screenshot: Live window breakdown">
+      <img src="../screenshots/03-reset-timing-and-progress.png" alt="QuotaBar App Store screenshot: Reset timing and progress">
+    </section>
+  </main>
+</body>
+</html>

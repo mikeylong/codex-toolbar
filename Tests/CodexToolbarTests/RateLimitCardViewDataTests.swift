@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import CodexToolbar
+@testable import ToolbarCore
 
 final class RateLimitCardViewDataTests: XCTestCase {
     func testUsageCopyShowsUsedAndRemaining() {

@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import CodexToolbar
+@testable import ToolbarCore
 
 @MainActor
 final class ScreenshotScenarioTests: XCTestCase {
@@ -28,6 +28,7 @@ final class ScreenshotScenarioTests: XCTestCase {
         let store = RateLimitStore.makeShared(
             arguments: ["CodexToolbar", "--screenshot-scenario", "normal"],
             environment: [:],
+            presentation: .testPresentation,
             clientFactory: { client }
         )
 
@@ -44,6 +45,7 @@ final class ScreenshotScenarioTests: XCTestCase {
         let store = RateLimitStore.makeShared(
             arguments: ["CodexToolbar", "--screenshot-scenario", "multiweek"],
             environment: [:],
+            presentation: .testPresentation,
             clientFactory: { client }
         )
 
@@ -58,11 +60,11 @@ final class ScreenshotScenarioTests: XCTestCase {
     }
 }
 
-private final class FakeScreenshotClient: @unchecked Sendable, CodexRateLimitClient {
+private final class FakeScreenshotClient: @unchecked Sendable, RateLimitClient {
     private(set) var loadSnapshotCallCount = 0
     private(set) var connectCallCount = 0
 
-    func events() -> AsyncStream<CodexAppServerEvent> {
+    func events() -> AsyncStream<RateLimitClientEvent> {
         AsyncStream { _ in }
     }
 

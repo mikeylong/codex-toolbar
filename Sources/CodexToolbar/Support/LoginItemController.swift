@@ -4,17 +4,17 @@ import ServiceManagement
 
 @MainActor
 @Observable
-final class LoginItemController {
-    static let shared = LoginItemController()
+package final class LoginItemController {
+    package static let shared = LoginItemController()
 
-    var isEnabled = false
-    var statusMessage = ""
+    package var isEnabled = false
+    package var statusMessage = ""
 
     private init() {
         reload()
     }
 
-    func reload() {
+    package func reload() {
         let status = SMAppService.mainApp.status
 
         switch status {
@@ -36,7 +36,7 @@ final class LoginItemController {
         }
     }
 
-    func setEnabled(_ enabled: Bool) {
+    package func setEnabled(_ enabled: Bool) {
         do {
             if enabled {
                 try SMAppService.mainApp.register()

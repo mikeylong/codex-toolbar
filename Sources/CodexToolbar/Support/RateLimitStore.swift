@@ -3,29 +3,28 @@ import Observation
 
 @MainActor
 @Observable
-final class RateLimitStore {
+package final class RateLimitStore {
     private enum WindowRole {
         case primary
         case secondary
     }
 
-    static let shared = makeShared()
-
-    enum State: Equatable {
+    package enum State: Equatable {
         case idle
         case connecting
         case ready
         case error(String)
     }
 
-    var state: State = .idle
-    var cards: [RateLimitCardViewData] = []
-    var statusMessage = "Connecting to Codex…"
-    var lastUpdated: Date?
-    var staleMessage: String?
-    var debugDetail: String?
+    package var state: State = .idle
+    package var cards: [RateLimitCardViewData] = []
+    package var statusMessage: String
+    package var lastUpdated: Date?
+    package var staleMessage: String?
+    package var debugDetail: String?
 
-    private let client: any CodexRateLimitClient
+    private let client: any RateLimitClient
+    private let presentation: ToolbarPresentation
     private let reconnectDelayNanoseconds: UInt64
     private let refreshDelayNanosecondsProvider: @Sendable () -> UInt64
     private let liveUpdatesEnabled: Bool
@@ -34,27 +33,29 @@ final class RateLimitStore {
     private var reconnectTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
 
-    init(
-        client: any CodexRateLimitClient,
+    package init(
+        client: any RateLimitClient,
+        presentation: ToolbarPresentation,
         reconnectDelayNanoseconds: UInt64 = 2_000_000_000,
         refreshDelayNanosecondsProvider: @escaping @Sendable () -> UInt64 = { RateLimitStore.defaultRefreshDelayNanoseconds() },
         initialState: State = .idle,
         initialCards: [RateLimitCardViewData] = [],
-        initialStatusMessage: String = "Connecting to Codex…",
+        initialStatusMessage: String? = nil,
         initialLastUpdated: Date? = nil,
         liveUpdatesEnabled: Bool = true
     ) {
         self.client = client
+        self.presentation = presentation
         self.reconnectDelayNanoseconds = reconnectDelayNanoseconds
         self.refreshDelayNanosecondsProvider = refreshDelayNanosecondsProvider
         self.liveUpdatesEnabled = liveUpdatesEnabled
         state = initialState
         cards = initialCards
-        statusMessage = initialStatusMessage
+        statusMessage = initialStatusMessage ?? presentation.connectingStatusMessage
         lastUpdated = initialLastUpdated
     }
 
-    func start() async {
+    package func start() async {
         guard !started else { return }
         started = true
 
@@ -80,9 +81,9 @@ final class RateLimitStore {
         Task { [weak self] in
             guard let self else { return }
             do {
-                debugDetail = "Connecting to Codex app-server"
+                debugDetail = presentation.connectDebugDetail
                 try await client.connect()
-                if debugDetail == "Connecting to Codex app-server" {
+                if debugDetail == presentation.connectDebugDetail {
                     debugDetail = "Live updates connected"
                 }
             } catch {
@@ -95,7 +96,7 @@ final class RateLimitStore {
         await refreshNow(source: .startup)
     }
 
-    func stop() async {
+    package func stop() async {
         reconnectTask?.cancel()
         eventTask?.cancel()
         refreshTask?.cancel()
@@ -106,11 +107,11 @@ final class RateLimitStore {
         await client.disconnect()
     }
 
-    func refreshNow() async {
+    package func refreshNow() async {
         await refreshNow(source: .manual)
     }
 
-    var statusBarText: String {
+    package var statusBarText: String {
         switch state {
         case .idle, .connecting:
             return cards.first.map { "\($0.remainingPercent)% \($0.compactLabel)" } ?? "--"
@@ -131,7 +132,7 @@ final class RateLimitStore {
     private func refreshNow(source: RefreshSource) async {
         state = .connecting
         if cards.isEmpty || source == .manual {
-            statusMessage = "Connecting to Codex…"
+            statusMessage = presentation.connectingStatusMessage
         }
         staleMessage = nil
         debugDetail = "Refresh source: \(String(describing: source))"
@@ -144,26 +145,24 @@ final class RateLimitStore {
 
             if account.account == nil {
                 debugDetail = "No signed-in account"
-                applyError("Sign in to Codex to view rate limits.")
+                applyError(presentation.signInRequiredMessage)
                 return
             }
 
             apply(snapshot: response.displaySnapshot())
-        } catch let error as CodexAppServerError {
-            handleRefreshError(error, preserveCards: !cards.isEmpty)
         } catch {
             handleRefreshError(error, preserveCards: !cards.isEmpty)
         }
     }
 
-    private func handle(event: CodexAppServerEvent) async {
+    private func handle(event: RateLimitClientEvent) async {
         switch event {
         case let .rateLimitsUpdated(response):
             apply(snapshot: response.displaySnapshot())
         case let .disconnected(reason):
-            state = .error("Disconnected from Codex.")
+            state = .error(presentation.disconnectedMessage)
             statusMessage = reason ?? "Retrying…"
-            staleMessage = cards.isEmpty ? nil : (reason ?? "Disconnected from Codex.")
+            staleMessage = cards.isEmpty ? nil : (reason ?? presentation.disconnectedMessage)
             scheduleReconnect()
         case .stderr:
             break
@@ -176,7 +175,7 @@ final class RateLimitStore {
 
         if cards.isEmpty {
             debugDetail = "Snapshot contained no cards"
-            applyError("No rate-limit data available.")
+            applyError(presentation.noDataMessage)
             return
         }
 
@@ -192,7 +191,7 @@ final class RateLimitStore {
         staleMessage = cards.isEmpty ? nil : message
         debugDetail = message
 
-        if message == "Sign in to Codex to view rate limits." || message == "No rate-limit data available." {
+        if message == presentation.signInRequiredMessage || message == presentation.noDataMessage {
             cards = []
             staleMessage = nil
         }
@@ -201,15 +200,10 @@ final class RateLimitStore {
     private func handleRefreshError(_ error: Error, preserveCards: Bool) {
         let message: String
 
-        if let appServerError = error as? CodexAppServerError {
-            switch appServerError {
-            case .codexCLINotFound:
-                message = "Codex CLI not found."
-            default:
-                message = appServerError.localizedDescription
-            }
+        if let clientError = error as? RateLimitClientError {
+            message = clientError.localizedDescription
         } else {
-            message = "Unable to load Codex rate limits."
+            message = presentation.unableToLoadMessage
         }
 
         if preserveCards {
@@ -223,7 +217,7 @@ final class RateLimitStore {
         }
     }
 
-    static func makeCards(
+    package static func makeCards(
         from snapshot: CodexRateLimitsSnapshot,
         now: Date = Date(),
         calendar: Calendar = .current,
@@ -276,10 +270,11 @@ final class RateLimitStore {
         }
     }
 
-    static func makeShared(
+    package static func makeShared(
         arguments: [String] = ProcessInfo.processInfo.arguments,
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        clientFactory: @escaping () -> any CodexRateLimitClient = { CodexAppServerClient() }
+        presentation: ToolbarPresentation,
+        clientFactory: @escaping () -> any RateLimitClient
     ) -> RateLimitStore {
         if let launchConfiguration = ScreenshotLaunchConfiguration.current(arguments: arguments, environment: environment) {
             let cards = makeCards(
@@ -289,11 +284,12 @@ final class RateLimitStore {
                 locale: launchConfiguration.scenario.locale,
                 timeZone: launchConfiguration.scenario.timeZone
             )
-            let statusMessage = cards.isEmpty ? "No rate-limit data available." : "Rate limits remaining"
+            let statusMessage = cards.isEmpty ? presentation.noDataMessage : "Rate limits remaining"
             let state: State = cards.isEmpty ? .error(statusMessage) : .ready
 
             return RateLimitStore(
                 client: clientFactory(),
+                presentation: presentation,
                 initialState: state,
                 initialCards: cards,
                 initialStatusMessage: statusMessage,
@@ -302,10 +298,10 @@ final class RateLimitStore {
             )
         }
 
-        return RateLimitStore(client: clientFactory())
+        return RateLimitStore(client: clientFactory(), presentation: presentation)
     }
 
-    nonisolated static func defaultRefreshDelayNanoseconds(now: Date = Date(), calendar: Calendar = .current) -> UInt64 {
+    package nonisolated static func defaultRefreshDelayNanoseconds(now: Date = Date(), calendar: Calendar = .current) -> UInt64 {
         let currentSecond = calendar.component(.second, from: now)
         let currentNanosecond = calendar.component(.nanosecond, from: now)
 

@@ -1,15 +1,16 @@
 import Foundation
 
-struct StartupDiagnosticsConfiguration: Equatable, Sendable {
-    let outputPath: String
-    let terminateAfterFirstReport: Bool
+package struct StartupDiagnosticsConfiguration: Equatable, Sendable {
+    package let outputPath: String
+    package let terminateAfterFirstReport: Bool
 
-    static func current(
+    package static func current(
         arguments: [String] = ProcessInfo.processInfo.arguments,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> StartupDiagnosticsConfiguration? {
         let outputPath = argumentValue(named: "--startup-diagnostics-output", arguments: arguments)
             ?? environment["CODEX_TOOLBAR_STARTUP_DIAGNOSTICS_OUTPUT"]
+            ?? environment["QUOTABAR_STARTUP_DIAGNOSTICS_OUTPUT"]
 
         guard let outputPath, !outputPath.isEmpty else {
             return nil
@@ -17,7 +18,8 @@ struct StartupDiagnosticsConfiguration: Equatable, Sendable {
 
         let terminateAfterFirstReport = boolValue(
             argumentValue(named: "--startup-diagnostics-exit", arguments: arguments)
-                ?? environment["CODEX_TOOLBAR_STARTUP_DIAGNOSTICS_EXIT"],
+                ?? environment["CODEX_TOOLBAR_STARTUP_DIAGNOSTICS_EXIT"]
+                ?? environment["QUOTABAR_STARTUP_DIAGNOSTICS_EXIT"],
             defaultValue: false
         )
 
@@ -51,18 +53,18 @@ struct StartupDiagnosticsConfiguration: Equatable, Sendable {
     }
 }
 
-struct StartupDiagnosticsRecord: Codable, Equatable, Sendable {
-    let launched: Bool
-    let state: String
-    let statusMessage: String
-    let debugDetail: String?
-    let cardCount: Int
-    let statusBarText: String
-    let loginItemStatus: String
-    let timestamp: String
+package struct StartupDiagnosticsRecord: Codable, Equatable, Sendable {
+    package let launched: Bool
+    package let state: String
+    package let statusMessage: String
+    package let debugDetail: String?
+    package let cardCount: Int
+    package let statusBarText: String
+    package let loginItemStatus: String
+    package let timestamp: String
 
     @MainActor
-    init(store: RateLimitStore, loginItemStatus: String, timestamp: Date = Date()) {
+    package init(store: RateLimitStore, loginItemStatus: String, timestamp: Date = Date()) {
         launched = true
         state = Self.stateString(for: store.state)
         statusMessage = store.statusMessage
@@ -73,14 +75,12 @@ struct StartupDiagnosticsRecord: Codable, Equatable, Sendable {
         self.timestamp = ISO8601DateFormatter().string(from: timestamp)
     }
 
-    var isValidFirstRunState: Bool {
+    package func isValidFirstRunState(validErrorMessages: Set<String>) -> Bool {
         switch state {
         case "ready":
             return cardCount > 0
         case "error":
-            return statusMessage == "Codex CLI not found."
-                || statusMessage == "Sign in to Codex to view rate limits."
-                || statusMessage == "No rate-limit data available."
+            return validErrorMessages.contains(statusMessage)
         default:
             return false
         }
@@ -101,14 +101,14 @@ struct StartupDiagnosticsRecord: Codable, Equatable, Sendable {
 }
 
 @MainActor
-final class StartupDiagnosticsReporter {
+package final class StartupDiagnosticsReporter {
     private let configuration: StartupDiagnosticsConfiguration
 
-    init(configuration: StartupDiagnosticsConfiguration) {
+    package init(configuration: StartupDiagnosticsConfiguration) {
         self.configuration = configuration
     }
 
-    func report(store: RateLimitStore, loginItemStatus: String) throws {
+    package func report(store: RateLimitStore, loginItemStatus: String) throws {
         let record = StartupDiagnosticsRecord(store: store, loginItemStatus: loginItemStatus)
         let data = try JSONEncoder.prettyPrinted.encode(record)
         let url = URL(fileURLWithPath: configuration.outputPath)

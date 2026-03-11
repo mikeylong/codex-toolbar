@@ -1,12 +1,13 @@
 import Foundation
 import XCTest
-@testable import CodexToolbar
+@testable import ToolbarCore
 
 @MainActor
 final class StartupDiagnosticsTests: XCTestCase {
     func testReadyStateWithCardsIsValidFirstRunState() {
         let store = RateLimitStore(
             client: FakeStartupDiagnosticsClient(),
+            presentation: .testPresentation,
             initialState: .ready,
             initialCards: [RateLimitCardViewData(window: makeWindow(usedPercent: 19, durationMinutes: 300))],
             initialStatusMessage: "Rate limits remaining",
@@ -16,7 +17,7 @@ final class StartupDiagnosticsTests: XCTestCase {
 
         let record = StartupDiagnosticsRecord(store: store, loginItemStatus: "Launch at login disabled")
 
-        XCTAssertTrue(record.isValidFirstRunState)
+        XCTAssertTrue(record.isValidFirstRunState(validErrorMessages: ToolbarPresentation.testPresentation.validStartupErrorMessages))
         XCTAssertEqual(record.state, "ready")
         XCTAssertEqual(record.cardCount, 1)
     }
@@ -24,30 +25,32 @@ final class StartupDiagnosticsTests: XCTestCase {
     func testExpectedErrorStateIsValidFirstRunState() {
         let store = RateLimitStore(
             client: FakeStartupDiagnosticsClient(),
-            initialState: .error("Codex CLI not found."),
+            presentation: .testPresentation,
+            initialState: .error("Client unavailable."),
             initialCards: [],
-            initialStatusMessage: "Codex CLI not found.",
+            initialStatusMessage: "Client unavailable.",
             liveUpdatesEnabled: false
         )
 
         let record = StartupDiagnosticsRecord(store: store, loginItemStatus: "Launch at login disabled")
 
-        XCTAssertTrue(record.isValidFirstRunState)
+        XCTAssertTrue(record.isValidFirstRunState(validErrorMessages: ToolbarPresentation.testPresentation.validStartupErrorMessages))
         XCTAssertEqual(record.state, "error")
     }
 
     func testConnectingStateIsNotValidFirstRunState() {
         let store = RateLimitStore(
             client: FakeStartupDiagnosticsClient(),
+            presentation: .testPresentation,
             initialState: .connecting,
             initialCards: [],
-            initialStatusMessage: "Connecting to Codex…",
+            initialStatusMessage: "Connecting…",
             liveUpdatesEnabled: false
         )
 
         let record = StartupDiagnosticsRecord(store: store, loginItemStatus: "Launch at login disabled")
 
-        XCTAssertFalse(record.isValidFirstRunState)
+        XCTAssertFalse(record.isValidFirstRunState(validErrorMessages: ToolbarPresentation.testPresentation.validStartupErrorMessages))
     }
 
     private func makeWindow(usedPercent: Int, durationMinutes: Int) -> CodexRateLimitWindow {
@@ -55,8 +58,8 @@ final class StartupDiagnosticsTests: XCTestCase {
     }
 }
 
-private final class FakeStartupDiagnosticsClient: @unchecked Sendable, CodexRateLimitClient {
-    func events() -> AsyncStream<CodexAppServerEvent> {
+private final class FakeStartupDiagnosticsClient: @unchecked Sendable, RateLimitClient {
+    func events() -> AsyncStream<RateLimitClientEvent> {
         AsyncStream { _ in }
     }
 

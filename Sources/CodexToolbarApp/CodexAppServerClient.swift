@@ -1,45 +1,11 @@
 import Foundation
+import ToolbarCore
 
-protocol CodexRateLimitClient: Sendable {
-    func events() -> AsyncStream<CodexAppServerEvent>
-    func connect() async throws
-    func disconnect() async
-    func readAccount(refreshToken: Bool) async throws -> GetAccountResponse
-    func readRateLimits() async throws -> GetAccountRateLimitsResponse
-    func loadSnapshot(refreshToken: Bool) async throws -> (GetAccountResponse, GetAccountRateLimitsResponse)
-}
-
-enum CodexAppServerEvent: Sendable {
-    case rateLimitsUpdated(GetAccountRateLimitsResponse)
-    case disconnected(String?)
-    case stderr(String)
-}
-
-enum CodexAppServerError: LocalizedError, Sendable, Equatable {
-    case codexCLINotFound
-    case invalidResponse
-    case serverError(String)
-    case transportClosed
-
-    var errorDescription: String? {
-        switch self {
-        case .codexCLINotFound:
-            return "Codex CLI was not found in PATH."
-        case .invalidResponse:
-            return "Codex app-server returned an invalid response."
-        case let .serverError(message):
-            return message
-        case .transportClosed:
-            return "Codex app-server connection closed."
-        }
-    }
-}
-
-actor CodexAppServerClient: CodexRateLimitClient {
+actor CodexAppServerClient: RateLimitClient {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
-    private let eventStream: AsyncStream<CodexAppServerEvent>
-    private let eventContinuation: AsyncStream<CodexAppServerEvent>.Continuation
+    private let eventStream: AsyncStream<RateLimitClientEvent>
+    private let eventContinuation: AsyncStream<RateLimitClientEvent>.Continuation
 
     private var process: Process?
     private var stdinHandle: FileHandle?
@@ -50,14 +16,14 @@ actor CodexAppServerClient: CodexRateLimitClient {
     private var isConnected = false
 
     init() {
-        var continuation: AsyncStream<CodexAppServerEvent>.Continuation!
+        var continuation: AsyncStream<RateLimitClientEvent>.Continuation!
         eventStream = AsyncStream { streamContinuation in
             continuation = streamContinuation
         }
         eventContinuation = continuation
     }
 
-    nonisolated func events() -> AsyncStream<CodexAppServerEvent> {
+    nonisolated func events() -> AsyncStream<RateLimitClientEvent> {
         eventStream
     }
 
@@ -97,7 +63,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
                     await self.handleStdoutLine(String(line))
                 }
             } catch {
-                await self.finishPendingResponses(with: CodexAppServerError.transportClosed)
+                await self.finishPendingResponses(with: RateLimitClientError.transportClosed("Codex app-server connection closed."))
             }
         }
 
@@ -128,7 +94,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
         process = nil
         stdinHandle = nil
         isConnected = false
-        finishPendingResponses(with: CodexAppServerError.transportClosed)
+        finishPendingResponses(with: RateLimitClientError.transportClosed("Codex app-server connection closed."))
     }
 
     func readAccount(refreshToken: Bool) async throws -> GetAccountResponse {
@@ -247,7 +213,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
         do {
             return try decoder.decode(Response.self, from: responseData)
         } catch {
-            throw CodexAppServerError.invalidResponse
+            throw RateLimitClientError.invalidResponse("Codex app-server returned an invalid response.")
         }
     }
 
@@ -259,7 +225,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
 
     private func write(_ payload: Data) throws {
         guard let stdinHandle else {
-            throw CodexAppServerError.transportClosed
+            throw RateLimitClientError.transportClosed("Codex app-server connection closed.")
         }
 
         var linePayload = payload
@@ -279,12 +245,12 @@ actor CodexAppServerClient: CodexRateLimitClient {
         if let id = message["id"] as? String {
             if let errorObject = message["error"] as? [String: Any] {
                 let message = errorObject["message"] as? String ?? "Codex app-server request failed."
-                pendingResponses.removeValue(forKey: id)?.resume(throwing: CodexAppServerError.serverError(message))
+                pendingResponses.removeValue(forKey: id)?.resume(throwing: RateLimitClientError.serverError(message))
                 return
             }
 
             guard let result = message["result"] else {
-                pendingResponses.removeValue(forKey: id)?.resume(throwing: CodexAppServerError.invalidResponse)
+                pendingResponses.removeValue(forKey: id)?.resume(throwing: RateLimitClientError.invalidResponse("Codex app-server returned an invalid response."))
                 return
             }
 
@@ -292,7 +258,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
                 let resultData = try JSONSerialization.data(withJSONObject: result)
                 pendingResponses.removeValue(forKey: id)?.resume(returning: resultData)
             } catch {
-                pendingResponses.removeValue(forKey: id)?.resume(throwing: CodexAppServerError.invalidResponse)
+                pendingResponses.removeValue(forKey: id)?.resume(throwing: RateLimitClientError.invalidResponse("Codex app-server returned an invalid response."))
             }
 
             return
@@ -324,7 +290,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
         stderrTask?.cancel()
         stdoutTask = nil
         stderrTask = nil
-        finishPendingResponses(with: CodexAppServerError.transportClosed)
+        finishPendingResponses(with: RateLimitClientError.transportClosed("Codex app-server connection closed."))
 
         let reason = status == 0 ? nil : "Codex app-server exited with status \(status)."
         eventContinuation.yield(.disconnected(reason))
@@ -353,7 +319,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
             }
         }
 
-        throw CodexAppServerError.codexCLINotFound
+        throw RateLimitClientError.clientUnavailable("Codex CLI not found.")
     }
 
     nonisolated static func codexPathCandidates(environmentPath: String, homeDirectory: String) -> [String] {
@@ -462,7 +428,7 @@ private final class SnapshotLoadCollector: @unchecked Sendable {
         let message = stderrString.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
             ?? "Timed out reading Codex rate limits."
         let reason = status == 0 ? message : "Codex app-server exited with status \(status). \(message)"
-        finish(.failure(CodexAppServerError.serverError(reason)))
+        finish(.failure(RateLimitClientError.serverError(reason)))
     }
 
     func handleTimeout() {
@@ -472,7 +438,7 @@ private final class SnapshotLoadCollector: @unchecked Sendable {
 
         let message = stderrString.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
             ?? "Timed out reading Codex rate limits."
-        finish(.failure(CodexAppServerError.serverError(message)))
+        finish(.failure(RateLimitClientError.serverError(message)))
     }
 
     func handleFailure(_ error: Error) {

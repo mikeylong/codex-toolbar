@@ -2,6 +2,8 @@
 
 A small macOS menu bar app that shows your Codex rate-limit remaining values.
 
+The repository also contains an App Store-ready companion surface for `QuotaBar`, an independent macOS SKU that keeps the App Store build separate from the direct-download CodexToolbar app.
+
 ## What It Does
 
 - Shows the most constrained Codex window in the menu bar, including multi-week windows.
@@ -58,11 +60,23 @@ That quits `CodexToolbar` if it is running and removes `~/Applications/CodexTool
 ```bash
 swift test
 swift run CodexToolbar
+swift run QuotaBar -- --review-demo
 ./scripts/generate_screenshots.sh
+./scripts/generate_quotabar_screenshots.sh
 ./scripts/smoke_test_install.sh
 ```
 
 GitHub Actions runs `swift test` plus the installed-app smoke test on macOS for pull requests and pushes to `main`.
+
+## QuotaBar App Store Surface
+
+- Xcode project: `AppStore/QuotaBar.xcodeproj`
+- App Store metadata: `AppStore/AppStoreConnect.md`
+- Support and privacy pages: `AppStore/site/index.html` and `AppStore/site/privacy.html`
+- Project generator: `scripts/generate_quotabar_xcodeproj.rb`
+- Local archive gate: `scripts/archive_quotabar_app_store.sh`
+
+The QuotaBar App Store archive is intentionally blocked until `liveSyncAvailable` is set to `true` in `Sources/QuotaBar/QuotaBarReleaseGate.swift` and the App Store build has a documented, permitted live data source.
 
 ## Fresh Install Smoke Test
 

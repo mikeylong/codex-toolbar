@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import SwiftUI
+import ToolbarCore
 
 @main
 struct CodexToolbarApp: App {
@@ -15,7 +16,11 @@ struct CodexToolbarApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let store = RateLimitStore.shared
+    private let presentation = ToolbarPresentation.codexToolbar
+    private lazy var store = RateLimitStore.makeShared(
+        presentation: presentation,
+        clientFactory: { CodexAppServerClient() }
+    )
     private let loginItemController = LoginItemController.shared
     private let screenshotConfiguration = ScreenshotLaunchConfiguration.current()
     private let startupDiagnosticsConfiguration = StartupDiagnosticsConfiguration.current()
@@ -45,11 +50,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.target = self
         button.action = #selector(handleStatusItemClick(_:))
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        button.setAccessibilityLabel("Codex toolbar")
+        button.setAccessibilityLabel(presentation.statusItemAccessibilityLabel)
     }
 
     private func configurePopover() {
-        let controller = NSHostingController(rootView: StatusMenuContentView(store: store))
+        let controller = NSHostingController(rootView: StatusMenuContentView(store: store, presentation: presentation))
         let popover = NSPopover()
         popover.behavior = .transient
         popover.contentSize = NSSize(width: 352, height: 300)
@@ -80,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.imagePosition = .imageLeading
         button.imageScaling = .scaleProportionallyDown
         button.title = store.statusBarText
-        button.setAccessibilityLabel("Codex toolbar, \(store.statusBarText)")
+        button.setAccessibilityLabel("\(presentation.statusItemAccessibilityLabel), \(store.statusBarText)")
         button.sizeToFit()
     }
 
@@ -104,7 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             fputs("Startup diagnostics failed: \(error.localizedDescription)\n", stderr)
         }
 
-        guard record.isValidFirstRunState else {
+        guard record.isValidFirstRunState(validErrorMessages: presentation.validStartupErrorMessages) else {
             return
         }
 
@@ -194,7 +199,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return image
         }
 
-        let fallback = NSImage(systemSymbolName: "greaterthan.circle", accessibilityDescription: "Codex")
+        let fallback = NSImage(
+            systemSymbolName: "greaterthan.circle",
+            accessibilityDescription: ToolbarPresentation.codexToolbar.fallbackImageAccessibilityLabel
+        )
             ?? NSImage(size: NSSize(width: 16, height: 16))
         fallback.isTemplate = true
         fallback.size = NSSize(width: 16, height: 16)

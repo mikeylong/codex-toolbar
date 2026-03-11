@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import CodexToolbar
+@testable import ToolbarCore
 
 final class RateLimitFormatterTests: XCTestCase {
     func testFiveHourWindowLabel() {

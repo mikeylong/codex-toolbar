@@ -1,11 +1,17 @@
 import SwiftUI
 
-struct StatusMenuContentView: View {
-    let store: RateLimitStore
+package struct StatusMenuContentView: View {
+    package let store: RateLimitStore
+    package let presentation: ToolbarPresentation
 
-    var body: some View {
+    package init(store: RateLimitStore, presentation: ToolbarPresentation) {
+        self.store = store
+        self.presentation = presentation
+    }
+
+    package var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Codex rate limit status")
+            Text(presentation.panelTitle)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.primary)
 

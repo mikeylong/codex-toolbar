@@ -1,5 +1,5 @@
 import XCTest
-@testable import CodexToolbar
+@testable import ToolbarCore
 
 final class RateLimitDecodingTests: XCTestCase {
     func testDecodesSingleBucketResponse() throws {

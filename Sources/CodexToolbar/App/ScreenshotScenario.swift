@@ -1,11 +1,11 @@
 import AppKit
 import Foundation
 
-enum ScreenshotAppearance: String, CaseIterable, Equatable, Sendable {
+package enum ScreenshotAppearance: String, CaseIterable, Equatable, Sendable {
     case light
     case dark
 
-    var appAppearance: NSAppearance? {
+    package var appAppearance: NSAppearance? {
         switch self {
         case .light:
             return NSAppearance(named: .aqua)
@@ -15,16 +15,16 @@ enum ScreenshotAppearance: String, CaseIterable, Equatable, Sendable {
     }
 }
 
-struct ScreenshotScenario: Equatable, Sendable {
-    let name: String
-    let snapshot: CodexRateLimitsSnapshot
-    let now: Date
-    let lastUpdated: Date
-    let calendar: Calendar
-    let locale: Locale
-    let timeZone: TimeZone
+package struct ScreenshotScenario: Equatable, Sendable {
+    package let name: String
+    package let snapshot: CodexRateLimitsSnapshot
+    package let now: Date
+    package let lastUpdated: Date
+    package let calendar: Calendar
+    package let locale: Locale
+    package let timeZone: TimeZone
 
-    static func named(_ name: String) -> ScreenshotScenario? {
+    package static func named(_ name: String) -> ScreenshotScenario? {
         switch name.lowercased() {
         case "normal":
             return normal
@@ -91,7 +91,7 @@ struct ScreenshotScenario: Equatable, Sendable {
         )
     }
 
-    static let normal: ScreenshotScenario = {
+    package static let normal: ScreenshotScenario = {
         let now = date(year: 2026, month: 3, day: 8, hour: 13, minute: 3)
         let primaryReset = date(year: 2026, month: 3, day: 8, hour: 13, minute: 54)
         let secondaryReset = date(year: 2026, month: 3, day: 11, hour: 0, minute: 0)
@@ -106,7 +106,7 @@ struct ScreenshotScenario: Equatable, Sendable {
         )
     }()
 
-    static let warning: ScreenshotScenario = {
+    package static let warning: ScreenshotScenario = {
         let now = date(year: 2026, month: 3, day: 8, hour: 14, minute: 11)
         let primaryReset = date(year: 2026, month: 3, day: 8, hour: 14, minute: 46)
         let secondaryReset = date(year: 2026, month: 3, day: 11, hour: 0, minute: 0)
@@ -121,7 +121,7 @@ struct ScreenshotScenario: Equatable, Sendable {
         )
     }()
 
-    static let critical: ScreenshotScenario = {
+    package static let critical: ScreenshotScenario = {
         let now = date(year: 2026, month: 3, day: 8, hour: 16, minute: 22)
         let primaryReset = date(year: 2026, month: 3, day: 8, hour: 16, minute: 31)
         let secondaryReset = date(year: 2026, month: 3, day: 11, hour: 0, minute: 0)
@@ -136,7 +136,7 @@ struct ScreenshotScenario: Equatable, Sendable {
         )
     }()
 
-    static let exhausted: ScreenshotScenario = {
+    package static let exhausted: ScreenshotScenario = {
         let now = date(year: 2026, month: 3, day: 8, hour: 18, minute: 5)
         let primaryReset = date(year: 2026, month: 3, day: 8, hour: 18, minute: 5)
         let secondaryReset = date(year: 2026, month: 3, day: 11, hour: 0, minute: 0)
@@ -151,7 +151,7 @@ struct ScreenshotScenario: Equatable, Sendable {
         )
     }()
 
-    static let multiweek: ScreenshotScenario = {
+    package static let multiweek: ScreenshotScenario = {
         let now = date(year: 2026, month: 3, day: 10, hour: 22, minute: 46)
         let primaryReset = date(year: 2026, month: 3, day: 10, hour: 23, minute: 7)
         let secondaryReset = date(year: 2026, month: 3, day: 17, hour: 0, minute: 0)
@@ -173,20 +173,21 @@ struct ScreenshotScenario: Equatable, Sendable {
     }()
 }
 
-struct ScreenshotLaunchConfiguration: Equatable, Sendable {
-    let scenario: ScreenshotScenario
-    let appearance: ScreenshotAppearance
-    let outputDirectory: String?
-    let shouldCapturePopover: Bool
-    let shouldCaptureStatusItem: Bool
-    let shouldOpenPopover: Bool
+package struct ScreenshotLaunchConfiguration: Equatable, Sendable {
+    package let scenario: ScreenshotScenario
+    package let appearance: ScreenshotAppearance
+    package let outputDirectory: String?
+    package let shouldCapturePopover: Bool
+    package let shouldCaptureStatusItem: Bool
+    package let shouldOpenPopover: Bool
 
-    static func current(
+    package static func current(
         arguments: [String] = ProcessInfo.processInfo.arguments,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> ScreenshotLaunchConfiguration? {
         let scenarioName = argumentValue(named: "--screenshot-scenario", arguments: arguments)
             ?? environment["CODEX_TOOLBAR_SCREENSHOT_SCENARIO"]
+            ?? environment["QUOTABAR_SCREENSHOT_SCENARIO"]
 
         guard let scenarioName, let scenario = ScreenshotScenario.named(scenarioName) else {
             return nil
@@ -194,24 +195,29 @@ struct ScreenshotLaunchConfiguration: Equatable, Sendable {
 
         let appearanceName = argumentValue(named: "--screenshot-appearance", arguments: arguments)
             ?? environment["CODEX_TOOLBAR_SCREENSHOT_APPEARANCE"]
+            ?? environment["QUOTABAR_SCREENSHOT_APPEARANCE"]
             ?? ScreenshotAppearance.light.rawValue
         let appearance = ScreenshotAppearance(rawValue: appearanceName.lowercased()) ?? .light
 
         let outputDirectory = argumentValue(named: "--screenshot-output-dir", arguments: arguments)
             ?? environment["CODEX_TOOLBAR_SCREENSHOT_OUTPUT_DIR"]
+            ?? environment["QUOTABAR_SCREENSHOT_OUTPUT_DIR"]
         let shouldCapturePopover = boolValue(
             argumentValue(named: "--screenshot-capture-popover", arguments: arguments)
-                ?? environment["CODEX_TOOLBAR_SCREENSHOT_CAPTURE_POPOVER"],
+                ?? environment["CODEX_TOOLBAR_SCREENSHOT_CAPTURE_POPOVER"]
+                ?? environment["QUOTABAR_SCREENSHOT_CAPTURE_POPOVER"],
             defaultValue: true
         )
         let shouldCaptureStatusItem = boolValue(
             argumentValue(named: "--screenshot-capture-status-item", arguments: arguments)
-                ?? environment["CODEX_TOOLBAR_SCREENSHOT_CAPTURE_STATUS_ITEM"],
+                ?? environment["CODEX_TOOLBAR_SCREENSHOT_CAPTURE_STATUS_ITEM"]
+                ?? environment["QUOTABAR_SCREENSHOT_CAPTURE_STATUS_ITEM"],
             defaultValue: false
         )
         let shouldOpenPopover = boolValue(
             argumentValue(named: "--screenshot-open-popover", arguments: arguments)
-                ?? environment["CODEX_TOOLBAR_SCREENSHOT_OPEN_POPOVER"],
+                ?? environment["CODEX_TOOLBAR_SCREENSHOT_OPEN_POPOVER"]
+                ?? environment["QUOTABAR_SCREENSHOT_OPEN_POPOVER"],
             defaultValue: shouldCapturePopover
         )
 
