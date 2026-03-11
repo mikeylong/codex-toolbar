@@ -4,7 +4,7 @@ A small macOS menu bar app that shows your Codex rate-limit remaining values.
 
 ## What It Does
 
-- Shows the current `5h` remaining percentage in the menu bar.
+- Shows the most constrained Codex window in the menu bar, including multi-week windows.
 - Shows a popover with used/remaining percentages, progress bars, and reset timing.
 - Refreshes automatically on system clock minute boundaries.
 - Supports manual refresh from the menu bar item's right-click menu.
@@ -50,6 +50,7 @@ That quits `CodexToolbar` if it is running and removes `~/Applications/CodexTool
 
 - The app launches its own `codex app-server` subprocess. You do not need to keep an interactive Codex CLI session open.
 - The displayed percentages are remaining percentages, matching the Codex UI.
+- Window labels follow Codex UI display conventions first, with near-whole hour/day/week payload values normalized as a fallback.
 - Auto-refresh syncs to system clock minute boundaries, so the numbers update at the start of each minute unless you refresh manually from the right-click menu.
 
 ## Development

@@ -34,6 +34,8 @@ struct ScreenshotScenario: Equatable, Sendable {
             return critical
         case "exhausted":
             return exhausted
+        case "multiweek":
+            return multiweek
         default:
             return nil
         }
@@ -64,7 +66,13 @@ struct ScreenshotScenario: Equatable, Sendable {
         ))!
     }
 
-    private static func snapshot(primaryUsed: Int, primaryReset: Date, secondaryUsed: Int, secondaryReset: Date) -> CodexRateLimitsSnapshot {
+    private static func snapshot(
+        primaryUsed: Int,
+        primaryReset: Date,
+        secondaryUsed: Int,
+        secondaryReset: Date,
+        secondaryDurationMinutes: Int = 10080
+    ) -> CodexRateLimitsSnapshot {
         CodexRateLimitsSnapshot(
             credits: nil,
             limitId: "codex",
@@ -78,7 +86,7 @@ struct ScreenshotScenario: Equatable, Sendable {
             secondary: CodexRateLimitWindow(
                 resetsAt: Int64(secondaryReset.timeIntervalSince1970),
                 usedPercent: secondaryUsed,
-                windowDurationMins: 10080
+                windowDurationMins: secondaryDurationMinutes
             )
         )
     }
@@ -135,6 +143,27 @@ struct ScreenshotScenario: Equatable, Sendable {
         return ScreenshotScenario(
             name: "exhausted",
             snapshot: snapshot(primaryUsed: 100, primaryReset: primaryReset, secondaryUsed: 91, secondaryReset: secondaryReset),
+            now: now,
+            lastUpdated: now,
+            calendar: calendar,
+            locale: locale,
+            timeZone: pacificTimeZone
+        )
+    }()
+
+    static let multiweek: ScreenshotScenario = {
+        let now = date(year: 2026, month: 3, day: 10, hour: 22, minute: 46)
+        let primaryReset = date(year: 2026, month: 3, day: 10, hour: 23, minute: 7)
+        let secondaryReset = date(year: 2026, month: 3, day: 17, hour: 0, minute: 0)
+        return ScreenshotScenario(
+            name: "multiweek",
+            snapshot: snapshot(
+                primaryUsed: 15,
+                primaryReset: primaryReset,
+                secondaryUsed: 99,
+                secondaryReset: secondaryReset,
+                secondaryDurationMinutes: 10081
+            ),
             now: now,
             lastUpdated: now,
             calendar: calendar,

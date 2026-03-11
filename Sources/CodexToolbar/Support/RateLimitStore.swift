@@ -4,6 +4,11 @@ import Observation
 @MainActor
 @Observable
 final class RateLimitStore {
+    private enum WindowRole {
+        case primary
+        case secondary
+    }
+
     static let shared = makeShared()
 
     enum State: Equatable {
@@ -225,17 +230,28 @@ final class RateLimitStore {
         locale: Locale = .current,
         timeZone: TimeZone = .current
     ) -> [RateLimitCardViewData] {
-        let windows = [snapshot.primary, snapshot.secondary].compactMap { $0 }
-        let sorted = windows.sorted {
-            if $0.usedPercent == $1.usedPercent {
-                return ($0.windowDurationMins ?? .max) < ($1.windowDurationMins ?? .max)
-            }
-            return $0.usedPercent > $1.usedPercent
+        let windows = [
+            (window: snapshot.primary, role: WindowRole.primary),
+            (window: snapshot.secondary, role: WindowRole.secondary)
+        ].compactMap { entry in
+            entry.window.map { (window: $0, role: entry.role) }
         }
 
-        return sorted.enumerated().map { index, window in
+        let sorted = windows.sorted {
+            if $0.window.usedPercent == $1.window.usedPercent {
+                return ($0.window.windowDurationMins ?? .max) < ($1.window.windowDurationMins ?? .max)
+            }
+            return $0.window.usedPercent > $1.window.usedPercent
+        }
+
+        return sorted.enumerated().map { index, entry in
             RateLimitCardViewData(
-                window: window,
+                window: entry.window,
+                displayWindowDurationMins: displayWindowDurationMins(
+                    for: entry.window,
+                    role: entry.role,
+                    snapshot: snapshot
+                ),
                 isPrimary: index == 0,
                 now: now,
                 calendar: calendar,
@@ -243,6 +259,25 @@ final class RateLimitStore {
                 timeZone: timeZone
             )
         }
+    }
+
+    private static func displayWindowDurationMins(
+        for window: CodexRateLimitWindow,
+        role: WindowRole,
+        snapshot: CodexRateLimitsSnapshot
+    ) -> Int? {
+        guard
+            role == .secondary,
+            snapshot.limitId == "codex",
+            let windowDurationMins = window.windowDurationMins,
+            RateLimitFormatter.normalizedWindowMinutes(windowDurationMins) == 10080
+        else {
+            return window.windowDurationMins
+        }
+
+        // Codex UI labels the core secondary bucket as a 2-week window even
+        // when the current payload still reports a week-ish duration.
+        return 20160
     }
 
     static func makeShared(

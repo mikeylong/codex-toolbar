@@ -1,6 +1,8 @@
 import Foundation
 
 enum RateLimitFormatter {
+    private static let normalizationToleranceMinutes = 1
+
     static func remainingPercent(fromUsedPercent usedPercent: Int) -> Int {
         max(0, 100 - usedPercent)
     }
@@ -10,18 +12,22 @@ enum RateLimitFormatter {
             return "Limit"
         }
 
-        switch minutes {
+        let normalizedMinutes = normalizedWindowMinutes(minutes)
+
+        switch normalizedMinutes {
         case 300:
             return "5h"
         case 10080:
             return "Weekly"
+        case let value where value % 10080 == 0:
+            return "\(value / 10080) Week"
         case let value where value % 1440 == 0:
             let days = value / 1440
             return days == 1 ? "1d" : "\(days)d"
         case let value where value % 60 == 0:
             return "\(value / 60)h"
         default:
-            return "\(minutes)m"
+            return "\(normalizedMinutes)m"
         }
     }
 
@@ -30,18 +36,22 @@ enum RateLimitFormatter {
             return "Rate limit window"
         }
 
-        switch minutes {
+        let normalizedMinutes = normalizedWindowMinutes(minutes)
+
+        switch normalizedMinutes {
         case 300:
             return "Rolling 5-hour window"
         case 10080:
             return "Weekly"
+        case let value where value % 10080 == 0:
+            return "Rolling \(value / 10080)-week window"
         case let value where value % 1440 == 0:
             let days = value / 1440
             return days == 1 ? "Daily" : "Rolling \(days)-day window"
         case let value where value % 60 == 0:
             return "Rolling \(value / 60)-hour window"
         default:
-            return "Rolling \(minutes)-minute window"
+            return "Rolling \(normalizedMinutes)-minute window"
         }
     }
 
@@ -128,5 +138,37 @@ enum RateLimitFormatter {
         formatter.timeZone = timeZone
         formatter.dateFormat = "h:mm:ss a"
         return "Updated \(formatter.string(from: date))"
+    }
+
+    static func normalizedWindowMinutes(_ minutes: Int) -> Int {
+        if let normalizedWeeks = snapped(minutes: minutes, unitMinutes: 10080) {
+            return normalizedWeeks
+        }
+
+        if let normalizedDays = snapped(minutes: minutes, unitMinutes: 1440) {
+            return normalizedDays
+        }
+
+        if let normalizedHours = snapped(minutes: minutes, unitMinutes: 60) {
+            return normalizedHours
+        }
+
+        return minutes
+    }
+
+    private static func snapped(minutes: Int, unitMinutes: Int) -> Int? {
+        guard unitMinutes > 0 else { return nil }
+
+        let quotient = Double(minutes) / Double(unitMinutes)
+        let roundedQuotient = Int(quotient.rounded())
+        guard roundedQuotient > 0 else { return nil }
+
+        let snappedMinutes = roundedQuotient * unitMinutes
+        let drift = abs(snappedMinutes - minutes)
+        guard drift <= normalizationToleranceMinutes else {
+            return nil
+        }
+
+        return snappedMinutes
     }
 }

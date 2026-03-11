@@ -38,6 +38,24 @@ final class ScreenshotScenarioTests: XCTestCase {
         XCTAssertEqual(store.cards.first?.usageText, "19% used · 81% remaining")
         XCTAssertEqual(store.lastUpdated, ScreenshotScenario.normal.lastUpdated)
     }
+
+    func testMultiWeekScenarioBuildsTwoWeekLabelsEndToEnd() async {
+        let client = FakeScreenshotClient()
+        let store = RateLimitStore.makeShared(
+            arguments: ["CodexToolbar", "--screenshot-scenario", "multiweek"],
+            environment: [:],
+            clientFactory: { client }
+        )
+
+        await store.start()
+
+        XCTAssertEqual(client.loadSnapshotCallCount, 0)
+        XCTAssertEqual(store.state, .ready)
+        XCTAssertEqual(store.cards.first?.compactLabel, "2 Week")
+        XCTAssertEqual(store.cards.first?.title, "Rolling 2-week window")
+        XCTAssertEqual(store.statusBarText, "1% 2 Week")
+        XCTAssertEqual(store.lastUpdated, ScreenshotScenario.multiweek.lastUpdated)
+    }
 }
 
 private final class FakeScreenshotClient: @unchecked Sendable, CodexRateLimitClient {
