@@ -1,3 +1,5 @@
+![Codex usage status](screenshots/readme-normal-light-popover.png)
+
 # CodexToolbar
 
 A small macOS menu bar app that shows your Codex rate-limit remaining values.
