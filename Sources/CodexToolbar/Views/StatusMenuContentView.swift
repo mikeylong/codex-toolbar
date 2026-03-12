@@ -49,12 +49,6 @@ struct StatusMenuContentView: View {
                             .scaleEffect(0.75)
                     }
                 }
-
-                Spacer(minLength: 0)
-
-                Text("v\(appVersion)")
-                    .font(.body)
-                    .foregroundStyle(palette.secondaryText)
             }
         }
         .padding(16)
@@ -69,15 +63,6 @@ struct StatusMenuContentView: View {
                     }
             }
         }
-    }
-
-    private var appVersion: String {
-        if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
-           !version.isEmpty {
-            return version
-        }
-
-        return "0.1.1"
     }
 
     private var palette: StatusMenuPalette {

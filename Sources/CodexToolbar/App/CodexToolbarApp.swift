@@ -156,6 +156,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showContextMenu(from button: NSStatusBarButton) {
         popover?.performClose(nil)
 
+        let menu = makeContextMenu()
+
+        statusItem?.menu = menu
+        button.performClick(nil)
+        statusItem?.menu = nil
+    }
+
+    func makeContextMenu() -> NSMenu {
         let menu = NSMenu()
 
         let refreshItem = NSMenuItem(title: "Refresh now", action: #selector(refreshNow), keyEquivalent: "")
@@ -169,13 +177,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
+        let versionItem = NSMenuItem(title: "Version \(AppVersion.current)", action: nil, keyEquivalent: "")
+        versionItem.isEnabled = false
+        menu.addItem(versionItem)
+
         let quitItem = NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "")
         quitItem.target = self
         menu.addItem(quitItem)
 
-        statusItem?.menu = menu
-        button.performClick(nil)
-        statusItem?.menu = nil
+        return menu
     }
 
     @objc private func refreshNow() {
@@ -341,6 +351,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         try data.write(to: fileURL, options: .atomic)
     }
+}
+
+enum AppVersion {
+    static let current: String = {
+        if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+           !version.isEmpty {
+            return version
+        }
+
+        return "0.1.1"
+    }()
 }
 
 private enum ScreenshotCaptureError: LocalizedError {
