@@ -180,6 +180,7 @@ struct ScreenshotLaunchConfiguration: Equatable, Sendable {
     let shouldCapturePopover: Bool
     let shouldCaptureStatusItem: Bool
     let shouldOpenPopover: Bool
+    let showsOpenCodexButton: Bool?
 
     static func current(
         arguments: [String] = ProcessInfo.processInfo.arguments,
@@ -214,6 +215,10 @@ struct ScreenshotLaunchConfiguration: Equatable, Sendable {
                 ?? environment["CODEX_TOOLBAR_SCREENSHOT_OPEN_POPOVER"],
             defaultValue: shouldCapturePopover
         )
+        let showsOpenCodexButton = optionalBoolValue(
+            argumentValue(named: "--screenshot-show-open-codex", arguments: arguments)
+                ?? environment["CODEX_TOOLBAR_SCREENSHOT_SHOW_OPEN_CODEX"]
+        )
 
         return ScreenshotLaunchConfiguration(
             scenario: scenario,
@@ -221,7 +226,8 @@ struct ScreenshotLaunchConfiguration: Equatable, Sendable {
             outputDirectory: outputDirectory,
             shouldCapturePopover: shouldCapturePopover,
             shouldCaptureStatusItem: shouldCaptureStatusItem,
-            shouldOpenPopover: shouldOpenPopover
+            shouldOpenPopover: shouldOpenPopover,
+            showsOpenCodexButton: showsOpenCodexButton
         )
     }
 
@@ -245,6 +251,21 @@ struct ScreenshotLaunchConfiguration: Equatable, Sendable {
             return false
         default:
             return defaultValue
+        }
+    }
+
+    private static func optionalBoolValue(_ value: String?) -> Bool? {
+        guard let value else {
+            return nil
+        }
+
+        switch value.lowercased() {
+        case "1", "true", "yes", "on":
+            return true
+        case "0", "false", "no", "off":
+            return false
+        default:
+            return nil
         }
     }
 }

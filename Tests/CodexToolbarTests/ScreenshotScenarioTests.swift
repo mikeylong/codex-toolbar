@@ -90,6 +90,10 @@ private final class FakeScreenshotClient: @unchecked Sendable, CodexRateLimitCli
         )
     }
 
+    func readLoginStatus() async throws -> CodexLoginStatus {
+        .loggedIn
+    }
+
     func loadSnapshot(refreshToken: Bool) async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
         loadSnapshotCallCount += 1
         return (try await readAccount(refreshToken: refreshToken), try await readRateLimits())

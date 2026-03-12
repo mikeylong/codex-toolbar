@@ -82,6 +82,10 @@ private final class FakeStartupDiagnosticsClient: @unchecked Sendable, CodexRate
         )
     }
 
+    func readLoginStatus() async throws -> CodexLoginStatus {
+        .loggedIn
+    }
+
     func loadSnapshot(refreshToken: Bool) async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
         (try await readAccount(refreshToken: refreshToken), try await readRateLimits())
     }

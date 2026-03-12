@@ -9,8 +9,48 @@ CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
+is_module_cache_path_mismatch() {
+  local log_file="$1"
+
+  grep -Fq "PCH was compiled with module cache path" "$log_file" \
+    && grep -Fq "missing required module 'SwiftShims'" "$log_file"
+}
+
+run_release_build_once() {
+  local log_file="$1"
+
+  : > "$log_file"
+  swift build -c release 2>&1 | tee "$log_file"
+}
+
+build_release_binary() {
+  local log_file
+  log_file="$(mktemp -t codex-toolbar-build.XXXXXX.log)"
+  trap 'rm -f "$log_file"' EXIT
+
+  if run_release_build_once "$log_file"; then
+    trap - EXIT
+    rm -f "$log_file"
+    return 0
+  fi
+
+  if ! is_module_cache_path_mismatch "$log_file"; then
+    trap - EXIT
+    rm -f "$log_file"
+    return 1
+  fi
+
+  echo "Detected a stale Swift module cache after a repo move or rename." >&2
+  echo "Running 'swift package clean' and retrying the release build once..." >&2
+  swift package clean
+  run_release_build_once "$log_file"
+
+  trap - EXIT
+  rm -f "$log_file"
+}
+
 cd "$ROOT_DIR"
-swift build -c release
+build_release_binary
 BUILD_DIR="$(swift build -c release --show-bin-path)"
 
 rm -rf "$APP_DIR"

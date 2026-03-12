@@ -4,6 +4,8 @@ import SwiftUI
 struct StatusMenuContentView: View {
     let store: RateLimitStore
     let screenshotAppearance: ScreenshotAppearance?
+    let showsOpenCodexButton: Bool
+    let openCodexAction: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -38,6 +40,16 @@ struct StatusMenuContentView: View {
             Divider()
                 .overlay(palette.divider)
             HStack(spacing: 8) {
+                if showsOpenCodexButton {
+                    Button("Open Codex") {
+                        openCodexAction?()
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.body.weight(.semibold))
+                }
+
+                Spacer(minLength: 0)
+
                 if let lastUpdated = store.lastUpdated, !store.cards.isEmpty {
                     Text(RateLimitFormatter.updatedFooterText(for: lastUpdated))
                         .font(.body)

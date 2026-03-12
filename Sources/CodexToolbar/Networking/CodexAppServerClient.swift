@@ -6,6 +6,7 @@ protocol CodexRateLimitClient: Sendable {
     func disconnect() async
     func readAccount(refreshToken: Bool) async throws -> GetAccountResponse
     func readRateLimits() async throws -> GetAccountRateLimitsResponse
+    func readLoginStatus() async throws -> CodexLoginStatus
     func loadSnapshot(refreshToken: Bool) async throws -> (GetAccountResponse, GetAccountRateLimitsResponse)
 }
 
@@ -33,6 +34,12 @@ enum CodexAppServerError: LocalizedError, Sendable, Equatable {
             return "Codex app-server connection closed."
         }
     }
+}
+
+enum CodexLoginStatus: Equatable, Sendable {
+    case loggedIn
+    case loggedOut
+    case indeterminate(String?)
 }
 
 actor CodexAppServerClient: CodexRateLimitClient {
@@ -144,6 +151,21 @@ actor CodexAppServerClient: CodexRateLimitClient {
             method: "account/rateLimits/read",
             params: JSONNull(),
             responseType: GetAccountRateLimitsResponse.self
+        )
+    }
+
+    func readLoginStatus() async throws -> CodexLoginStatus {
+        let codexPath = try Self.locateCodexCLI()
+        let result = try await Self.runCodexCommand(
+            executablePath: codexPath,
+            arguments: ["login", "status"]
+        )
+
+        return Self.parseLoginStatus(
+            exitStatus: result.exitStatus,
+            stdout: result.stdout,
+            stderr: result.stderr,
+            timedOut: result.timedOut
         )
     }
 
@@ -380,6 +402,95 @@ actor CodexAppServerClient: CodexRateLimitClient {
             seen.insert(candidate).inserted
         }
     }
+
+    nonisolated static func parseLoginStatus(
+        exitStatus: Int32,
+        stdout: String,
+        stderr: String,
+        timedOut: Bool
+    ) -> CodexLoginStatus {
+        if timedOut {
+            return .indeterminate("Timed out checking Codex login status.")
+        }
+
+        if exitStatus == 0 {
+            return .loggedIn
+        }
+
+        let combined = [stdout, stderr]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+
+        let lowercased = combined.lowercased()
+        if lowercased.contains("not logged in")
+            || lowercased.contains("operation not permitted")
+            || lowercased.contains("permission denied")
+            || lowercased.contains("os error 1")
+        {
+            return .loggedOut
+        }
+
+        return .indeterminate(combined.nonEmpty)
+    }
+
+    private nonisolated static func runCodexCommand(
+        executablePath: String,
+        arguments: [String],
+        timeoutNanoseconds: UInt64 = 5_000_000_000
+    ) async throws -> ProcessExecutionResult {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executablePath)
+        process.arguments = arguments
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        try process.run()
+
+        let waitTask = Task.detached(priority: .utility) { () -> Int32 in
+            process.waitUntilExit()
+            return process.terminationStatus
+        }
+
+        let firstCompletion = await withTaskGroup(of: (Bool, Int32).self, returning: (Bool, Int32).self) { group in
+            group.addTask {
+                (false, await waitTask.value)
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: timeoutNanoseconds)
+                return (true, 0)
+            }
+
+            let first = await group.next() ?? (true, 0)
+            group.cancelAll()
+            return first
+        }
+
+        let timedOut = firstCompletion.0
+        let exitStatus: Int32
+
+        if timedOut {
+            if process.isRunning {
+                process.terminate()
+            }
+            exitStatus = await waitTask.value
+        } else {
+            exitStatus = firstCompletion.1
+        }
+
+        let stdout = String(decoding: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        let stderr = String(decoding: stderrPipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+
+        return ProcessExecutionResult(
+            exitStatus: exitStatus,
+            stdout: stdout,
+            stderr: stderr,
+            timedOut: timedOut
+        )
+    }
 }
 
 private extension String {
@@ -525,6 +636,13 @@ private struct JSONRPCRequest<Params: Encodable>: Encodable {
     let id: String
     let method: String
     let params: Params
+}
+
+private struct ProcessExecutionResult {
+    let exitStatus: Int32
+    let stdout: String
+    let stderr: String
+    let timedOut: Bool
 }
 
 private struct JSONRPCNotification<Params: Encodable>: Encodable {

@@ -32,4 +32,48 @@ final class CodexAppServerClientTests: XCTestCase {
 
         XCTAssertEqual(candidates.filter { $0 == "/Applications/Codex.app/Contents/Resources/codex" }.count, 1)
     }
+
+    func testParseLoginStatusTreatsExitZeroAsLoggedIn() {
+        let status = CodexAppServerClient.parseLoginStatus(
+            exitStatus: 0,
+            stdout: "Logged in using ChatGPT\n",
+            stderr: "",
+            timedOut: false
+        )
+
+        XCTAssertEqual(status, .loggedIn)
+    }
+
+    func testParseLoginStatusTreatsNotLoggedInAsLoggedOut() {
+        let status = CodexAppServerClient.parseLoginStatus(
+            exitStatus: 1,
+            stdout: "Not logged in\n",
+            stderr: "",
+            timedOut: false
+        )
+
+        XCTAssertEqual(status, .loggedOut)
+    }
+
+    func testParseLoginStatusTreatsPermissionErrorsAsLoggedOut() {
+        let status = CodexAppServerClient.parseLoginStatus(
+            exitStatus: 1,
+            stdout: "",
+            stderr: "Error checking login status: Operation not permitted (os error 1)\n",
+            timedOut: false
+        )
+
+        XCTAssertEqual(status, .loggedOut)
+    }
+
+    func testParseLoginStatusTreatsUnknownFailuresAsIndeterminate() {
+        let status = CodexAppServerClient.parseLoginStatus(
+            exitStatus: 2,
+            stdout: "",
+            stderr: "Unexpected login failure\n",
+            timedOut: false
+        )
+
+        XCTAssertEqual(status, .indeterminate("Unexpected login failure"))
+    }
 }

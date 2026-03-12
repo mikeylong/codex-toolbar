@@ -132,6 +132,117 @@ final class RateLimitStoreTests: XCTestCase {
         XCTAssertEqual(Array(client.readAccountRefreshTokens.dropFirst(refreshTokensBeforeManualRefresh)), [true])
     }
 
+    func testStartupLoggedOutPreflightShowsSignInWithoutSnapshot() async {
+        let client = FakeCodexRateLimitClient()
+        client.loginStatusResults = [.success(.loggedOut)]
+        let store = RateLimitStore(
+            client: client,
+            reconnectDelayNanoseconds: 10_000_000_000,
+            refreshDelayNanosecondsProvider: { 10_000_000_000 }
+        )
+
+        await store.start()
+
+        XCTAssertEqual(store.state, .error("Sign in to Codex to view rate limits."))
+        XCTAssertEqual(client.loadSnapshotCallCount, 0)
+        XCTAssertGreaterThanOrEqual(client.readLoginStatusCallCount, 1)
+    }
+
+    func testStartupCodexCLINotFoundWinsBeforeAuthHandling() async {
+        let client = FakeCodexRateLimitClient()
+        client.loginStatusResults = [.failure(CodexAppServerError.codexCLINotFound)]
+        let store = RateLimitStore(
+            client: client,
+            reconnectDelayNanoseconds: 10_000_000_000,
+            refreshDelayNanosecondsProvider: { 10_000_000_000 }
+        )
+
+        await store.start()
+
+        XCTAssertEqual(store.state, .error("Codex CLI not found."))
+        XCTAssertEqual(store.statusMessage, "Codex CLI not found.")
+        XCTAssertEqual(client.loadSnapshotCallCount, 0)
+    }
+
+    func testManualRefreshLoggedOutPreflightSkipsSnapshot() async {
+        let client = FakeCodexRateLimitClient()
+        client.loginStatusResults = [.success(.loggedIn), .success(.loggedOut)]
+        let store = RateLimitStore(
+            client: client,
+            reconnectDelayNanoseconds: 10_000_000_000,
+            refreshDelayNanosecondsProvider: { 10_000_000_000 }
+        )
+
+        await store.start()
+        XCTAssertEqual(client.loadSnapshotCallCount, 1)
+
+        await store.refreshNow()
+
+        XCTAssertEqual(store.state, .error("Sign in to Codex to view rate limits."))
+        XCTAssertEqual(client.loadSnapshotCallCount, 1)
+        XCTAssertEqual(client.readLoginStatusCallCount, 2)
+    }
+
+    func testTimerRefreshPreflightsWhenAlreadyShowingSignInError() async {
+        let client = FakeCodexRateLimitClient()
+        client.loginStatusResults = Array(repeating: .success(.loggedOut), count: 6)
+        let store = RateLimitStore(
+            client: client,
+            reconnectDelayNanoseconds: 10_000_000_000,
+            refreshDelayNanosecondsProvider: { 50_000_000 }
+        )
+
+        await store.start()
+        try? await Task.sleep(nanoseconds: 140_000_000)
+
+        XCTAssertEqual(store.state, .error("Sign in to Codex to view rate limits."))
+        XCTAssertEqual(client.loadSnapshotCallCount, 0)
+        XCTAssertGreaterThanOrEqual(client.readLoginStatusCallCount, 2)
+    }
+
+    func testTimeoutFallbackMapsLoggedOutStateToSignIn() async {
+        let client = FakeCodexRateLimitClient()
+        client.loginStatusResults = [.success(.loggedIn), .success(.loggedOut)]
+        let store = RateLimitStore(
+            client: client,
+            reconnectDelayNanoseconds: 10_000_000_000,
+            refreshDelayNanosecondsProvider: { 50_000_000 }
+        )
+
+        await store.start()
+        client.loadSnapshotError = CodexAppServerError.serverError("Timed out reading Codex rate limits.")
+        let initialCards = store.cards
+
+        await waitUntil {
+            store.statusMessage == "Sign in to Codex to view rate limits."
+                && client.loadSnapshotCallCount >= 2
+        }
+
+        XCTAssertEqual(store.statusMessage, "Sign in to Codex to view rate limits.")
+        XCTAssertEqual(store.staleMessage, "Sign in to Codex to view rate limits.")
+        XCTAssertEqual(store.cards, initialCards)
+        XCTAssertEqual(client.readLoginStatusCallCount, 2)
+    }
+
+    func testStartupIgnoresRequiresOpenaiAuthWhenAccountIsPresent() async {
+        let client = FakeCodexRateLimitClient()
+        client.accountResponse = GetAccountResponse(
+            account: .chatgpt(email: "mike@example.com", planType: .pro),
+            requiresOpenaiAuth: true
+        )
+        let store = RateLimitStore(
+            client: client,
+            reconnectDelayNanoseconds: 10_000_000_000,
+            refreshDelayNanosecondsProvider: { 10_000_000_000 }
+        )
+
+        await store.start()
+
+        XCTAssertEqual(store.state, .ready)
+        XCTAssertFalse(store.cards.isEmpty)
+        XCTAssertEqual(store.statusMessage, "Rate limits remaining")
+    }
+
     func testDefaultRefreshDelayAlignsToNextMinuteBoundary() {
         let timeZone = TimeZone(secondsFromGMT: 0)!
         var calendar = Calendar(identifier: .gregorian)
@@ -181,9 +292,13 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
 
     private(set) var connectCallCount = 0
     private(set) var loadSnapshotCallCount = 0
+    private(set) var readLoginStatusCallCount = 0
     private(set) var readRateLimitsCallCount = 0
     private(set) var readAccountRefreshTokens: [Bool] = []
     var failReadRateLimits: Error?
+    var loadSnapshotError: Error?
+    var loginStatusResults: [Result<CodexLoginStatus, Error>] = []
+    var accountResponse = GetAccountResponse(account: .chatgpt(email: "mike@example.com", planType: .pro), requiresOpenaiAuth: false)
     private var isConnected = false
 
     func events() -> AsyncStream<CodexAppServerEvent> {
@@ -202,7 +317,7 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
 
     func readAccount(refreshToken: Bool) async throws -> GetAccountResponse {
         readAccountRefreshTokens.append(refreshToken)
-        return GetAccountResponse(account: .chatgpt(email: "mike@example.com", planType: .pro), requiresOpenaiAuth: false)
+        return accountResponse
     }
 
     func readRateLimits() async throws -> GetAccountRateLimitsResponse {
@@ -225,8 +340,23 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
         )
     }
 
+    func readLoginStatus() async throws -> CodexLoginStatus {
+        readLoginStatusCallCount += 1
+
+        if !loginStatusResults.isEmpty {
+            return try loginStatusResults.removeFirst().get()
+        }
+
+        return .loggedIn
+    }
+
     func loadSnapshot(refreshToken: Bool) async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
         loadSnapshotCallCount += 1
+
+        if let loadSnapshotError {
+            throw loadSnapshotError
+        }
+
         return (try await readAccount(refreshToken: refreshToken), try await readRateLimits())
     }
 

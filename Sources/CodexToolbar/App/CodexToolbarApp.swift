@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import Observation
 import SwiftUI
 
@@ -15,15 +16,50 @@ struct CodexToolbarApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let store = RateLimitStore.shared
-    private let loginItemController = LoginItemController.shared
-    private let screenshotConfiguration = ScreenshotLaunchConfiguration.current()
-    private let startupDiagnosticsConfiguration = StartupDiagnosticsConfiguration.current()
+    private let store: RateLimitStore
+    private let loginItemController: LoginItemController
+    private let codexDesktopAppProvider: any CodexDesktopAppProviding
+    private let maintenanceLaunchConfiguration: MaintenanceLaunchConfiguration?
+    private let screenshotConfiguration: ScreenshotLaunchConfiguration?
+    private let startupDiagnosticsConfiguration: StartupDiagnosticsConfiguration?
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var startupDiagnosticsDidFinish = false
+    var popoverCloseHandler: (() -> Void)?
+
+    override init() {
+        store = .shared
+        loginItemController = .shared
+        codexDesktopAppProvider = CodexDesktopAppController()
+        maintenanceLaunchConfiguration = MaintenanceLaunchConfiguration.current()
+        screenshotConfiguration = ScreenshotLaunchConfiguration.current()
+        startupDiagnosticsConfiguration = StartupDiagnosticsConfiguration.current()
+        super.init()
+    }
+
+    init(
+        store: RateLimitStore,
+        loginItemController: LoginItemController,
+        codexDesktopAppProvider: any CodexDesktopAppProviding,
+        maintenanceLaunchConfiguration: MaintenanceLaunchConfiguration?,
+        screenshotConfiguration: ScreenshotLaunchConfiguration?,
+        startupDiagnosticsConfiguration: StartupDiagnosticsConfiguration?
+    ) {
+        self.store = store
+        self.loginItemController = loginItemController
+        self.codexDesktopAppProvider = codexDesktopAppProvider
+        self.maintenanceLaunchConfiguration = maintenanceLaunchConfiguration
+        self.screenshotConfiguration = screenshotConfiguration
+        self.startupDiagnosticsConfiguration = startupDiagnosticsConfiguration
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let maintenanceLaunchConfiguration {
+            runMaintenanceAction(maintenanceLaunchConfiguration)
+            return
+        }
+
         NSApp.setActivationPolicy(.accessory)
         NSApp.appearance = screenshotConfiguration?.appearance.appAppearance
         configureStatusItem()
@@ -35,6 +71,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         maybeReportStartupDiagnostics()
         scheduleScreenshotCaptureIfNeeded()
+    }
+
+    private func runMaintenanceAction(_ configuration: MaintenanceLaunchConfiguration) {
+        NSApp.setActivationPolicy(.prohibited)
+
+        let result = MaintenanceActionRunner(loginItemController: loginItemController)
+            .run(configuration: configuration)
+
+        let output = "\(result.message)\n"
+        if result.exitCode == 0 {
+            fputs(output, stdout)
+        } else {
+            fputs(output, stderr)
+        }
+
+        fflush(stdout)
+        fflush(stderr)
+        exit(result.exitCode)
     }
 
     private func configureStatusItem() {
@@ -49,17 +103,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configurePopover() {
-        let controller = NSHostingController(
-            rootView: StatusMenuContentView(
-                store: store,
-                screenshotAppearance: screenshotConfiguration?.appearance
-            )
-        )
         let popover = NSPopover()
         popover.behavior = .transient
         popover.contentSize = NSSize(width: 352, height: 300)
-        popover.contentViewController = controller
+        popover.contentViewController = NSHostingController(rootView: makeStatusMenuContentView())
         self.popover = popover
+    }
+
+    func makeStatusMenuContentView() -> StatusMenuContentView {
+        StatusMenuContentView(
+            store: store,
+            screenshotAppearance: screenshotConfiguration?.appearance,
+            showsOpenCodexButton: shouldShowOpenCodexButton,
+            openCodexAction: makeOpenCodexAction()
+        )
     }
 
     private func observeState() {
@@ -149,6 +206,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showPopover(relativeTo button: NSStatusBarButton) {
         guard let popover else { return }
+        if let controller = popover.contentViewController as? NSHostingController<StatusMenuContentView> {
+            controller.rootView = makeStatusMenuContentView()
+        }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
     }
@@ -200,6 +260,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quitApp() {
         NSApplication.shared.terminate(nil)
+    }
+
+    private var shouldShowOpenCodexButton: Bool {
+        if let showsOpenCodexButton = screenshotConfiguration?.showsOpenCodexButton {
+            return showsOpenCodexButton
+        }
+
+        return codexDesktopAppProvider.installedApplicationURL != nil
+    }
+
+    private func makeOpenCodexAction() -> (() -> Void)? {
+        guard shouldShowOpenCodexButton else {
+            return nil
+        }
+
+        return { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+
+                do {
+                    try await self.codexDesktopAppProvider.openCodex()
+                    self.closePopover()
+                } catch {
+                    fputs("Open Codex failed: \(error.localizedDescription)\n", stderr)
+                }
+            }
+        }
+    }
+
+    private func closePopover() {
+        if let popoverCloseHandler {
+            popoverCloseHandler()
+            return
+        }
+
+        popover?.performClose(nil)
     }
 
     private static func statusItemImage() -> NSImage {

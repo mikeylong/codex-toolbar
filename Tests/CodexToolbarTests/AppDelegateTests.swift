@@ -4,6 +4,57 @@ import XCTest
 
 @MainActor
 final class AppDelegateTests: XCTestCase {
+    func testPopoverContentShowsOpenCodexButtonWhenInstalledAppExists() {
+        let delegate = makeDelegate(installedApplicationURL: URL(fileURLWithPath: "/Applications/Codex.app"))
+
+        let view = delegate.makeStatusMenuContentView()
+
+        XCTAssertTrue(view.showsOpenCodexButton)
+    }
+
+    func testPopoverContentHidesOpenCodexButtonWhenInstalledAppIsMissing() {
+        let delegate = makeDelegate(installedApplicationURL: nil)
+
+        let view = delegate.makeStatusMenuContentView()
+
+        XCTAssertFalse(view.showsOpenCodexButton)
+    }
+
+    func testOpenCodexActionOpensAppAndClosesPopover() async {
+        let fakeProvider = FakeCodexDesktopAppProvider(installedApplicationURL: URL(fileURLWithPath: "/Applications/Codex.app"))
+        let delegate = makeDelegate(codexDesktopAppProvider: fakeProvider)
+        let closeExpectation = expectation(description: "popover closed")
+        delegate.popoverCloseHandler = {
+            closeExpectation.fulfill()
+        }
+
+        let view = delegate.makeStatusMenuContentView()
+        view.openCodexAction?()
+
+        await fulfillment(of: [closeExpectation], timeout: 1)
+        XCTAssertEqual(fakeProvider.openCallCount, 1)
+    }
+
+    func testScreenshotOverrideShowsOpenCodexButtonWithoutInstalledApp() {
+        let screenshotConfiguration = ScreenshotLaunchConfiguration(
+            scenario: .normal,
+            appearance: .light,
+            outputDirectory: nil,
+            shouldCapturePopover: true,
+            shouldCaptureStatusItem: false,
+            shouldOpenPopover: true,
+            showsOpenCodexButton: true
+        )
+        let delegate = makeDelegate(
+            installedApplicationURL: nil,
+            screenshotConfiguration: screenshotConfiguration
+        )
+
+        let view = delegate.makeStatusMenuContentView()
+
+        XCTAssertTrue(view.showsOpenCodexButton)
+    }
+
     func testContextMenuIncludesDisabledVersionItemAboveQuit() {
         let delegate = AppDelegate()
 
@@ -20,4 +71,53 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertFalse(menu.items[3].isEnabled)
         XCTAssertEqual(menu.items[4].title, "Quit")
     }
+
+    private func makeDelegate(
+        installedApplicationURL: URL?,
+        screenshotConfiguration: ScreenshotLaunchConfiguration? = nil
+    ) -> AppDelegate {
+        makeDelegate(
+            codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: installedApplicationURL),
+            screenshotConfiguration: screenshotConfiguration
+        )
+    }
+
+    private func makeDelegate(
+        codexDesktopAppProvider: any CodexDesktopAppProviding,
+        screenshotConfiguration: ScreenshotLaunchConfiguration? = nil
+    ) -> AppDelegate {
+        AppDelegate(
+            store: RateLimitStore.makeShared(
+                arguments: ["CodexToolbar", "--screenshot-scenario", "normal"],
+                environment: [:]
+            ),
+            loginItemController: LoginItemController(service: FakeLoginItemService()),
+            codexDesktopAppProvider: codexDesktopAppProvider,
+            maintenanceLaunchConfiguration: nil,
+            screenshotConfiguration: screenshotConfiguration,
+            startupDiagnosticsConfiguration: nil
+        )
+    }
+}
+
+@MainActor
+private final class FakeCodexDesktopAppProvider: CodexDesktopAppProviding {
+    let installedApplicationURL: URL?
+    private(set) var openCallCount = 0
+
+    init(installedApplicationURL: URL?) {
+        self.installedApplicationURL = installedApplicationURL
+    }
+
+    func openCodex() async throws {
+        openCallCount += 1
+    }
+}
+
+@MainActor
+private struct FakeLoginItemService: LoginItemService {
+    var status: LoginItemRegistrationStatus { .notRegistered }
+
+    func register() throws {}
+    func unregister() throws {}
 }

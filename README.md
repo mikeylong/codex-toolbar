@@ -6,6 +6,7 @@ A small macOS menu bar app that shows your Codex rate-limit remaining values.
 
 - Shows the most constrained Codex window in the menu bar, including multi-week windows.
 - Shows a popover with used/remaining percentages, progress bars, and reset timing.
+- Adds an `Open Codex` button in the popover when the Codex desktop app is installed.
 - Refreshes automatically on system clock minute boundaries.
 - Supports manual refresh from the menu bar item's right-click menu.
 - Can be installed as a real `.app` and configured to launch at login.
@@ -32,11 +33,12 @@ That installs `CodexToolbar.app` to `~/Applications` and opens it.
 ./scripts/uninstall_app.sh
 ```
 
-That quits `CodexToolbar` if it is running and removes `~/Applications/CodexToolbar.app`.
+That quits `CodexToolbar` if it is running, removes its launch-at-login registration, and deletes `~/Applications/CodexToolbar.app`.
 
 ## Use
 
 - Left-click the menu bar item to see the current rate-limit status panel.
+- Use the popover's `Open Codex` button to jump into the Codex desktop app when it is installed locally.
 - Right-click the menu bar item for `Refresh now`, `Launch at login`, and `Quit`.
 - Use `Launch at login` after running the installed app from `~/Applications`.
 
@@ -64,6 +66,17 @@ swift run CodexToolbar
 ```
 
 GitHub Actions runs `swift test` plus the installed-app smoke test on macOS for pull requests and pushes to `main`.
+
+## Troubleshooting
+
+If you move or rename the repo and `swift run CodexToolbar` stops compiling with an error like `PCH was compiled with module cache path ...` plus `missing required module 'SwiftShims'`, clear the stale Swift module cache and rerun:
+
+```bash
+swift package clean
+swift run CodexToolbar
+```
+
+`./scripts/build_app.sh` and `./scripts/install_app.sh` automatically retry once after `swift package clean` when they detect this specific cache-mismatch failure.
 
 ## Fresh Install Smoke Test
 

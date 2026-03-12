@@ -4,6 +4,10 @@ import Observation
 @MainActor
 @Observable
 final class RateLimitStore {
+    private static let signInMessage = "Sign in to Codex to view rate limits."
+    private static let codexCLINotFoundMessage = "Codex CLI not found."
+    private static let noRateLimitDataMessage = "No rate-limit data available."
+
     private enum WindowRole {
         case primary
         case secondary
@@ -87,7 +91,7 @@ final class RateLimitStore {
                 }
             } catch {
                 debugDetail = "Connect failed: \(error.localizedDescription)"
-                handleRefreshError(error, preserveCards: !cards.isEmpty)
+                await handleRefreshError(error, preserveCards: !cards.isEmpty)
                 scheduleReconnect()
             }
         }
@@ -137,6 +141,10 @@ final class RateLimitStore {
         debugDetail = "Refresh source: \(String(describing: source))"
 
         do {
+            if try await shouldApplyLoggedOutErrorBeforeSnapshot(for: source) {
+                return
+            }
+
             let refreshToken = source != .startup
             debugDetail = "Loading snapshot (refreshToken=\(refreshToken))"
             let (account, response) = try await client.loadSnapshot(refreshToken: refreshToken)
@@ -144,15 +152,15 @@ final class RateLimitStore {
 
             if account.account == nil {
                 debugDetail = "No signed-in account"
-                applyError("Sign in to Codex to view rate limits.")
+                applyError(Self.signInMessage)
                 return
             }
 
             apply(snapshot: response.displaySnapshot())
         } catch let error as CodexAppServerError {
-            handleRefreshError(error, preserveCards: !cards.isEmpty)
+            await handleRefreshError(error, preserveCards: !cards.isEmpty)
         } catch {
-            handleRefreshError(error, preserveCards: !cards.isEmpty)
+            await handleRefreshError(error, preserveCards: !cards.isEmpty)
         }
     }
 
@@ -176,7 +184,7 @@ final class RateLimitStore {
 
         if cards.isEmpty {
             debugDetail = "Snapshot contained no cards"
-            applyError("No rate-limit data available.")
+            applyError(Self.noRateLimitDataMessage)
             return
         }
 
@@ -192,19 +200,33 @@ final class RateLimitStore {
         staleMessage = cards.isEmpty ? nil : message
         debugDetail = message
 
-        if message == "Sign in to Codex to view rate limits." || message == "No rate-limit data available." {
+        if message == Self.signInMessage || message == Self.noRateLimitDataMessage {
             cards = []
             staleMessage = nil
         }
     }
 
-    private func handleRefreshError(_ error: Error, preserveCards: Bool) {
+    private func handleRefreshError(_ error: Error, preserveCards: Bool) async {
+        if await shouldMapToSignInError(error) {
+            if preserveCards {
+                state = .error(Self.signInMessage)
+                statusMessage = Self.signInMessage
+                staleMessage = Self.signInMessage
+                debugDetail = Self.signInMessage
+                scheduleReconnect()
+            } else {
+                applyError(Self.signInMessage)
+                scheduleReconnect()
+            }
+            return
+        }
+
         let message: String
 
         if let appServerError = error as? CodexAppServerError {
             switch appServerError {
             case .codexCLINotFound:
-                message = "Codex CLI not found."
+                message = Self.codexCLINotFoundMessage
             default:
                 message = appServerError.localizedDescription
             }
@@ -221,6 +243,62 @@ final class RateLimitStore {
             applyError(message)
             scheduleReconnect()
         }
+    }
+
+    private func shouldApplyLoggedOutErrorBeforeSnapshot(for source: RefreshSource) async throws -> Bool {
+        guard shouldPreflightLoginStatus(for: source) else {
+            return false
+        }
+
+        let loginStatus = try await client.readLoginStatus()
+        switch loginStatus {
+        case .loggedIn:
+            return false
+        case .loggedOut:
+            debugDetail = "Codex login status: logged out"
+            applyError(Self.signInMessage)
+            return true
+        case let .indeterminate(detail):
+            if let detail {
+                debugDetail = "Codex login status indeterminate: \(detail)"
+            }
+            return false
+        }
+    }
+
+    private func shouldPreflightLoginStatus(for source: RefreshSource) -> Bool {
+        switch source {
+        case .startup, .manual, .reconnect:
+            return true
+        case .timer:
+            return cards.isEmpty || statusMessage == Self.signInMessage || staleMessage == Self.signInMessage
+        }
+    }
+
+    private func shouldMapToSignInError(_ error: Error) async -> Bool {
+        guard isSnapshotTimeout(error) else {
+            return false
+        }
+
+        do {
+            let loginStatus = try await client.readLoginStatus()
+            if case .loggedOut = loginStatus {
+                debugDetail = "Codex login status fallback: logged out"
+                return true
+            }
+        } catch {
+            debugDetail = "Codex login status fallback failed: \(error.localizedDescription)"
+        }
+
+        return false
+    }
+
+    private func isSnapshotTimeout(_ error: Error) -> Bool {
+        guard case let .serverError(message) = error as? CodexAppServerError else {
+            return false
+        }
+
+        return message.contains("Timed out reading Codex rate limits.")
     }
 
     static func makeCards(
@@ -326,7 +404,7 @@ final class RateLimitStore {
             do {
                 try await client.connect()
             } catch {
-                handleRefreshError(error, preserveCards: !cards.isEmpty)
+                await handleRefreshError(error, preserveCards: !cards.isEmpty)
                 scheduleReconnect()
                 return
             }
