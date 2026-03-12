@@ -41,11 +41,9 @@ struct StatusMenuContentView: View {
                 .overlay(palette.divider)
             HStack(spacing: 8) {
                 if showsOpenCodexButton {
-                    Button("Open Codex") {
+                    FooterActionButton(title: "Open Codex", palette: palette) {
                         openCodexAction?()
                     }
-                    .buttonStyle(.bordered)
-                    .font(.body.weight(.semibold))
                 }
 
                 Spacer(minLength: 0)
@@ -79,6 +77,44 @@ struct StatusMenuContentView: View {
 
     private var palette: StatusMenuPalette {
         StatusMenuPalette.forScreenshotAppearance(screenshotAppearance)
+    }
+}
+
+private struct FooterActionButton: View {
+    let title: String
+    let palette: StatusMenuPalette
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.body)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+        }
+        .buttonStyle(FooterActionButtonStyle(palette: palette, isHovering: isHovering))
+        .onHover { hovering in
+            isHovering = hovering
+        }
+    }
+}
+
+private struct FooterActionButtonStyle: ButtonStyle {
+    let palette: StatusMenuPalette
+    let isHovering: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(palette.actionText)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(palette.actionHighlight)
+                    .opacity(isHovering || configuration.isPressed ? 1 : 0)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .animation(.easeOut(duration: 0.12), value: isHovering || configuration.isPressed)
     }
 }
 
@@ -165,54 +201,106 @@ private struct RateLimitProgressBar: View {
     }
 }
 
-private struct StatusMenuPalette {
-    let surface: Color?
-    let border: Color
-    let primaryText: Color
-    let secondaryText: Color
-    let divider: Color
-    let progressTrack: Color
-    let normalFill: Color
-    let warningFill: Color
-    let criticalFill: Color
+struct StatusMenuPalette {
+    let surfaceColor: NSColor?
+    let borderColor: NSColor
+    let primaryTextColor: NSColor
+    let secondaryTextColor: NSColor
+    let dividerColor: NSColor
+    let progressTrackColor: NSColor
+    let normalFillColor: NSColor
+    let warningFillColor: NSColor
+    let criticalFillColor: NSColor
+    let actionTextColor: NSColor
+    let actionHighlightColor: NSColor
+
+    var surface: Color? {
+        surfaceColor.map { Color(nsColor: $0) }
+    }
+
+    var border: Color {
+        Color(nsColor: borderColor)
+    }
+
+    var primaryText: Color {
+        Color(nsColor: primaryTextColor)
+    }
+
+    var secondaryText: Color {
+        Color(nsColor: secondaryTextColor)
+    }
+
+    var divider: Color {
+        Color(nsColor: dividerColor)
+    }
+
+    var progressTrack: Color {
+        Color(nsColor: progressTrackColor)
+    }
+
+    var normalFill: Color {
+        Color(nsColor: normalFillColor)
+    }
+
+    var warningFill: Color {
+        Color(nsColor: warningFillColor)
+    }
+
+    var criticalFill: Color {
+        Color(nsColor: criticalFillColor)
+    }
+
+    var actionText: Color {
+        Color(nsColor: actionTextColor)
+    }
+
+    var actionHighlight: Color {
+        Color(nsColor: actionHighlightColor)
+    }
 
     static func forScreenshotAppearance(_ appearance: ScreenshotAppearance?) -> StatusMenuPalette {
         switch appearance {
         case .light:
             return StatusMenuPalette(
-                surface: Color(nsColor: NSColor(red: 0.95, green: 0.95, blue: 0.96, alpha: 1.0)),
-                border: Color(nsColor: NSColor(red: 0.79, green: 0.80, blue: 0.84, alpha: 1.0)),
-                primaryText: Color(nsColor: NSColor(red: 0.13, green: 0.13, blue: 0.15, alpha: 1.0)),
-                secondaryText: Color(nsColor: NSColor(red: 0.40, green: 0.41, blue: 0.46, alpha: 1.0)),
-                divider: Color(nsColor: NSColor(red: 0.79, green: 0.80, blue: 0.84, alpha: 1.0)),
-                progressTrack: Color(nsColor: NSColor(red: 0.78, green: 0.79, blue: 0.82, alpha: 1.0)),
-                normalFill: Color(nsColor: NSColor(red: 0.27, green: 0.27, blue: 0.29, alpha: 1.0)),
-                warningFill: Color(nsColor: .systemOrange),
-                criticalFill: Color(nsColor: .systemRed)
+                surfaceColor: NSColor(red: 0.95, green: 0.95, blue: 0.96, alpha: 1.0),
+                borderColor: NSColor(red: 0.79, green: 0.80, blue: 0.84, alpha: 1.0),
+                primaryTextColor: NSColor(red: 0.13, green: 0.13, blue: 0.15, alpha: 1.0),
+                secondaryTextColor: NSColor(red: 0.40, green: 0.41, blue: 0.46, alpha: 1.0),
+                dividerColor: NSColor(red: 0.79, green: 0.80, blue: 0.84, alpha: 1.0),
+                progressTrackColor: NSColor(red: 0.78, green: 0.79, blue: 0.82, alpha: 1.0),
+                normalFillColor: NSColor(red: 0.27, green: 0.27, blue: 0.29, alpha: 1.0),
+                warningFillColor: .systemOrange,
+                criticalFillColor: .systemRed,
+                actionTextColor: NSColor(red: 0.13, green: 0.13, blue: 0.15, alpha: 1.0),
+                actionHighlightColor: NSColor(red: 0.79, green: 0.80, blue: 0.84, alpha: 0.28)
             )
         case .dark:
             return StatusMenuPalette(
-                surface: Color(nsColor: NSColor(red: 0.10, green: 0.12, blue: 0.15, alpha: 1.0)),
-                border: Color(nsColor: NSColor(red: 0.26, green: 0.29, blue: 0.34, alpha: 1.0)),
-                primaryText: Color(nsColor: NSColor(red: 0.94, green: 0.95, blue: 0.97, alpha: 1.0)),
-                secondaryText: Color(nsColor: NSColor(red: 0.63, green: 0.66, blue: 0.72, alpha: 1.0)),
-                divider: Color(nsColor: NSColor(red: 0.26, green: 0.29, blue: 0.34, alpha: 1.0)),
-                progressTrack: Color(nsColor: NSColor(red: 0.26, green: 0.29, blue: 0.34, alpha: 1.0)),
-                normalFill: Color(nsColor: NSColor(red: 0.86, green: 0.89, blue: 0.93, alpha: 1.0)),
-                warningFill: Color(nsColor: .systemOrange),
-                criticalFill: Color(nsColor: .systemRed)
+                surfaceColor: NSColor(red: 0.10, green: 0.12, blue: 0.15, alpha: 1.0),
+                borderColor: NSColor(red: 0.26, green: 0.29, blue: 0.34, alpha: 1.0),
+                primaryTextColor: NSColor(red: 0.94, green: 0.95, blue: 0.97, alpha: 1.0),
+                secondaryTextColor: NSColor(red: 0.63, green: 0.66, blue: 0.72, alpha: 1.0),
+                dividerColor: NSColor(red: 0.26, green: 0.29, blue: 0.34, alpha: 1.0),
+                progressTrackColor: NSColor(red: 0.26, green: 0.29, blue: 0.34, alpha: 1.0),
+                normalFillColor: NSColor(red: 0.86, green: 0.89, blue: 0.93, alpha: 1.0),
+                warningFillColor: .systemOrange,
+                criticalFillColor: .systemRed,
+                actionTextColor: NSColor(red: 0.94, green: 0.95, blue: 0.97, alpha: 1.0),
+                actionHighlightColor: NSColor(red: 0.26, green: 0.29, blue: 0.34, alpha: 0.90)
             )
         case nil:
             return StatusMenuPalette(
-                surface: nil,
-                border: .clear,
-                primaryText: Color(nsColor: .labelColor),
-                secondaryText: Color(nsColor: .secondaryLabelColor),
-                divider: Color(nsColor: .separatorColor),
-                progressTrack: Color(nsColor: .quaternaryLabelColor),
-                normalFill: Color(nsColor: .labelColor),
-                warningFill: Color(nsColor: .systemOrange),
-                criticalFill: Color(nsColor: .systemRed)
+                surfaceColor: nil,
+                borderColor: .clear,
+                primaryTextColor: .labelColor,
+                secondaryTextColor: .secondaryLabelColor,
+                dividerColor: .separatorColor,
+                progressTrackColor: .quaternaryLabelColor,
+                normalFillColor: .labelColor,
+                warningFillColor: .systemOrange,
+                criticalFillColor: .systemRed,
+                actionTextColor: .labelColor,
+                actionHighlightColor: NSColor.quaternaryLabelColor.withAlphaComponent(0.35)
             )
         }
     }
