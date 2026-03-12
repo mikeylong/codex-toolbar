@@ -2,6 +2,8 @@ import AppKit
 import SwiftUI
 
 struct StatusMenuContentView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let store: RateLimitStore
     let screenshotAppearance: ScreenshotAppearance?
     let showsOpenCodexButton: Bool
@@ -76,7 +78,7 @@ struct StatusMenuContentView: View {
     }
 
     private var palette: StatusMenuPalette {
-        StatusMenuPalette.forScreenshotAppearance(screenshotAppearance)
+        StatusMenuPalette.forAppearance(screenshotAppearance, colorScheme: colorScheme)
     }
 }
 
@@ -97,6 +99,9 @@ private struct FooterActionButton: View {
         .buttonStyle(FooterActionButtonStyle(palette: palette, isHovering: isHovering))
         .onHover { hovering in
             isHovering = hovering
+        }
+        .onDisappear {
+            isHovering = false
         }
     }
 }
@@ -258,7 +263,7 @@ struct StatusMenuPalette {
         Color(nsColor: actionHighlightColor)
     }
 
-    static func forScreenshotAppearance(_ appearance: ScreenshotAppearance?) -> StatusMenuPalette {
+    static func forAppearance(_ appearance: ScreenshotAppearance?, colorScheme: ColorScheme) -> StatusMenuPalette {
         switch appearance {
         case .light:
             return StatusMenuPalette(
@@ -300,8 +305,17 @@ struct StatusMenuPalette {
                 warningFillColor: .systemOrange,
                 criticalFillColor: .systemRed,
                 actionTextColor: .labelColor,
-                actionHighlightColor: NSColor.quaternaryLabelColor.withAlphaComponent(0.35)
+                actionHighlightColor: liveActionHighlightColor(for: colorScheme)
             )
+        }
+    }
+
+    private static func liveActionHighlightColor(for colorScheme: ColorScheme) -> NSColor {
+        switch colorScheme {
+        case .dark:
+            return NSColor(white: 1.0, alpha: 0.12)
+        default:
+            return NSColor(white: 0.0, alpha: 0.12)
         }
     }
 }
