@@ -1,4 +1,4 @@
-![Codex usage status](screenshots/readme-normal-light-popover.png)
+![Codex usage status](screenshots/codex-status-hero.png)
 
 # CodexToolbar
 
