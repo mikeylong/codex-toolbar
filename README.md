@@ -44,9 +44,10 @@ That quits `CodexToolbar` if it is running and removes `~/Applications/CodexTool
 
 ## Screenshots
 
-| Normal | Warning | Critical |
-| --- | --- | --- |
-| ![Normal status popover](screenshots/readme-normal-light-popover.png) | ![Warning status popover](screenshots/readme-warning-light-popover.png) | ![Critical status popover](screenshots/readme-critical-light-popover.png) |
+| Theme | Normal | Warning | Critical |
+| --- | --- | --- | --- |
+| Light | ![Normal light mode status popover](screenshots/readme-normal-light-popover.png) | ![Warning light mode status popover](screenshots/readme-warning-light-popover.png) | ![Critical light mode status popover](screenshots/readme-critical-light-popover.png) |
+| Dark | ![Normal dark mode status popover](screenshots/readme-normal-dark-popover.png) | ![Warning dark mode status popover](screenshots/readme-warning-dark-popover.png) | ![Critical dark mode status popover](screenshots/readme-critical-dark-popover.png) |
 
 ## Notes
 

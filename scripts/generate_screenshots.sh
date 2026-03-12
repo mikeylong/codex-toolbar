@@ -9,7 +9,26 @@ README_SCENARIOS=(normal warning critical)
 "$ROOT_DIR/scripts/build_app.sh" >/dev/null
 
 mkdir -p "$SCREENSHOTS_DIR"
-find "$SCREENSHOTS_DIR" -maxdepth 1 -name '*.png' -delete
+
+generated_files=()
+for appearance in light dark; do
+  for scenario in "${README_SCENARIOS[@]}"; do
+    generated_files+=("$SCREENSHOTS_DIR/$scenario-$appearance-popover.png")
+  done
+done
+
+generated_files+=(
+  "$SCREENSHOTS_DIR/normal-light-status-item.png"
+  "$SCREENSHOTS_DIR/critical-dark-status-item.png"
+)
+
+for scenario in "${README_SCENARIOS[@]}"; do
+  for appearance in light dark; do
+    generated_files+=("$SCREENSHOTS_DIR/readme-$scenario-$appearance-popover.png")
+  done
+done
+
+rm -f "${generated_files[@]}"
 
 run_capture() {
   local scenario="$1"
@@ -42,8 +61,10 @@ for appearance in light dark; do
 done
 
 for scenario in "${README_SCENARIOS[@]}"; do
-  cp "$SCREENSHOTS_DIR/$scenario-light-popover.png" \
-    "$SCREENSHOTS_DIR/readme-$scenario-light-popover.png"
+  for appearance in light dark; do
+    cp "$SCREENSHOTS_DIR/$scenario-$appearance-popover.png" \
+      "$SCREENSHOTS_DIR/readme-$scenario-$appearance-popover.png"
+  done
 done
 
 echo "Generated screenshots:"

@@ -49,7 +49,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configurePopover() {
-        let controller = NSHostingController(rootView: StatusMenuContentView(store: store))
+        let controller = NSHostingController(
+            rootView: StatusMenuContentView(
+                store: store,
+                screenshotAppearance: screenshotConfiguration?.appearance
+            )
+        )
         let popover = NSPopover()
         popover.behavior = .transient
         popover.contentSize = NSSize(width: 352, height: 300)
