@@ -1,5 +1,3 @@
-![Codex usage status](screenshots/codex-status-hero.png)
-
 # CodexToolbar
 
 A small macOS menu bar app that shows your Codex rate-limit remaining values.
