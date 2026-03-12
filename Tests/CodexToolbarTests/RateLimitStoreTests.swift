@@ -193,7 +193,10 @@ final class RateLimitStoreTests: XCTestCase {
         )
 
         await store.start()
-        try? await Task.sleep(nanoseconds: 140_000_000)
+        await waitUntil {
+            store.state == .error("Sign in to Codex to view rate limits.")
+                && client.readLoginStatusCallCount >= 2
+        }
 
         XCTAssertEqual(store.state, .error("Sign in to Codex to view rate limits."))
         XCTAssertEqual(client.loadSnapshotCallCount, 0)
