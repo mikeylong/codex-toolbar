@@ -51,15 +51,15 @@ struct StatusMenuContentView: View {
                 Spacer(minLength: 0)
 
                 if let lastUpdated = store.lastUpdated, !store.cards.isEmpty {
-                    Text(RateLimitFormatter.updatedFooterText(for: lastUpdated))
-                        .font(.body)
-                        .foregroundStyle(palette.primaryText)
-
                     if store.state == .connecting {
                         ProgressView()
                             .controlSize(.small)
                             .scaleEffect(0.75)
                     }
+
+                    Text(RateLimitFormatter.updatedFooterText(for: lastUpdated))
+                        .font(.body)
+                        .foregroundStyle(palette.primaryText)
                 }
             }
         }
