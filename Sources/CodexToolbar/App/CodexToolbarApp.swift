@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let store: RateLimitStore
     private let loginItemController: LoginItemController
     private let codexDesktopAppProvider: any CodexDesktopAppProviding
+    private let preferences: ToolbarPreferences
     private let maintenanceLaunchConfiguration: MaintenanceLaunchConfiguration?
     private let screenshotConfiguration: ScreenshotLaunchConfiguration?
     private let startupDiagnosticsConfiguration: StartupDiagnosticsConfiguration?
@@ -31,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store = .shared
         loginItemController = .shared
         codexDesktopAppProvider = CodexDesktopAppController()
+        preferences = .shared
         maintenanceLaunchConfiguration = MaintenanceLaunchConfiguration.current()
         screenshotConfiguration = ScreenshotLaunchConfiguration.current()
         startupDiagnosticsConfiguration = StartupDiagnosticsConfiguration.current()
@@ -41,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store: RateLimitStore,
         loginItemController: LoginItemController,
         codexDesktopAppProvider: any CodexDesktopAppProviding,
+        preferences: ToolbarPreferences = .shared,
         maintenanceLaunchConfiguration: MaintenanceLaunchConfiguration?,
         screenshotConfiguration: ScreenshotLaunchConfiguration?,
         startupDiagnosticsConfiguration: StartupDiagnosticsConfiguration?
@@ -48,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.store = store
         self.loginItemController = loginItemController
         self.codexDesktopAppProvider = codexDesktopAppProvider
+        self.preferences = preferences
         self.maintenanceLaunchConfiguration = maintenanceLaunchConfiguration
         self.screenshotConfiguration = screenshotConfiguration
         self.startupDiagnosticsConfiguration = startupDiagnosticsConfiguration
@@ -114,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         StatusMenuContentView(
             store: store,
             screenshotAppearance: screenshotConfiguration?.appearance,
+            visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs,
             showsOpenCodexButton: shouldShowOpenCodexButton,
             openCodexAction: makeOpenCodexAction()
         )
@@ -235,6 +240,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launchItem.target = self
         menu.addItem(launchItem)
 
+        for family in GetAccountRateLimitsResponse.supportedSupplementalFamilies where family.isUserToggleable {
+            let item = NSMenuItem(
+                title: "Show \(family.categoryLabel)",
+                action: #selector(toggleSupplementalFamilyVisibility(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.state = visibleSupplementalFamilyIDs.contains(family.limitId) ? .on : .off
+            item.representedObject = family.limitId
+            menu.addItem(item)
+        }
+
         menu.addItem(.separator())
 
         let versionItem = NSMenuItem(title: "Version \(AppVersion.current)", action: nil, keyEquivalent: "")
@@ -258,6 +275,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         loginItemController.setEnabled(!loginItemController.isEnabled)
     }
 
+    @objc private func toggleSupplementalFamilyVisibility(_ sender: NSMenuItem) {
+        guard
+            let limitId = sender.representedObject as? String,
+            let family = GetAccountRateLimitsResponse.supplementalFamily(for: limitId)
+        else {
+            return
+        }
+
+        preferences.toggleSupplementalFamilyVisibility(family)
+    }
+
     @objc private func quitApp() {
         NSApplication.shared.terminate(nil)
     }
@@ -268,6 +296,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         return codexDesktopAppProvider.installedApplicationURL != nil
+    }
+
+    private var visibleSupplementalFamilyIDs: Set<String> {
+        if let visibleSupplementalFamilyIDs = screenshotConfiguration?.visibleSupplementalFamilyIDs {
+            return visibleSupplementalFamilyIDs
+        }
+
+        return preferences.visibleSupplementalFamilyIDs()
     }
 
     private func makeOpenCodexAction() -> (() -> Void)? {

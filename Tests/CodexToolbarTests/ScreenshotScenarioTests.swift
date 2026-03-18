@@ -93,6 +93,20 @@ final class ScreenshotScenarioTests: XCTestCase {
         XCTAssertEqual(store.statusBarText, "50% Weekly")
         XCTAssertEqual(store.lastUpdated, ScreenshotScenario.spark.lastUpdated)
     }
+
+    func testSparkScenarioCanHideSparkSectionsForDeterministicPopoverRendering() async {
+        let client = FakeScreenshotClient()
+        let store = RateLimitStore.makeShared(
+            arguments: ["CodexToolbar", "--screenshot-scenario", "spark"],
+            environment: [:],
+            clientFactory: { client }
+        )
+
+        await store.start()
+
+        XCTAssertEqual(store.visibleCardSections(visibleSupplementalFamilyIDs: []).map(\.familyId), ["codex"])
+        XCTAssertEqual(store.visibleCardSections(visibleSupplementalFamilyIDs: []).map(\.title), [nil])
+    }
 }
 
 private final class FakeScreenshotClient: @unchecked Sendable, CodexRateLimitClient {

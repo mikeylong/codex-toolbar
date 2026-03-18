@@ -229,6 +229,7 @@ struct ScreenshotLaunchConfiguration: Equatable, Sendable {
     let shouldCapturePopover: Bool
     let shouldCaptureStatusItem: Bool
     let shouldOpenPopover: Bool
+    let visibleSupplementalFamilyIDs: Set<String>?
     let showsOpenCodexButton: Bool?
 
     static func current(
@@ -268,6 +269,10 @@ struct ScreenshotLaunchConfiguration: Equatable, Sendable {
             argumentValue(named: "--screenshot-show-open-codex", arguments: arguments)
                 ?? environment["CODEX_TOOLBAR_SCREENSHOT_SHOW_OPEN_CODEX"]
         )
+        let visibleSupplementalFamilyIDs = familyIDsValue(
+            argumentValue(named: "--screenshot-visible-supplemental-families", arguments: arguments)
+                ?? environment["CODEX_TOOLBAR_SCREENSHOT_VISIBLE_SUPPLEMENTAL_FAMILIES"]
+        )
 
         return ScreenshotLaunchConfiguration(
             scenario: scenario,
@@ -276,6 +281,7 @@ struct ScreenshotLaunchConfiguration: Equatable, Sendable {
             shouldCapturePopover: shouldCapturePopover,
             shouldCaptureStatusItem: shouldCaptureStatusItem,
             shouldOpenPopover: shouldOpenPopover,
+            visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs,
             showsOpenCodexButton: showsOpenCodexButton
         )
     }
@@ -316,5 +322,18 @@ struct ScreenshotLaunchConfiguration: Equatable, Sendable {
         default:
             return nil
         }
+    }
+
+    private static func familyIDsValue(_ value: String?) -> Set<String>? {
+        guard let value else {
+            return nil
+        }
+
+        let familyIDs = value
+            .split(separator: ",")
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        return Set(familyIDs)
     }
 }

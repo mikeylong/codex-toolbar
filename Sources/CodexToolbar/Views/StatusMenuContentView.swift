@@ -6,24 +6,26 @@ struct StatusMenuContentView: View {
 
     let store: RateLimitStore
     let screenshotAppearance: ScreenshotAppearance?
+    let visibleSupplementalFamilyIDs: Set<String>
     let showsOpenCodexButton: Bool
     let openCodexAction: (() -> Void)?
 
     var body: some View {
-        let cardSections = store.cardSections
+        let visibleCards = store.visibleCards(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs)
+        let cardSections = store.visibleCardSections(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs)
 
         VStack(alignment: .leading, spacing: 14) {
             Text("Codex rate limit status")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(palette.primaryText)
 
-            if let staleMessage = store.staleMessage, !store.cards.isEmpty {
+            if let staleMessage = store.staleMessage, !visibleCards.isEmpty {
                 Label(staleMessage, systemImage: "exclamationmark.triangle.fill")
                     .font(.body.weight(.semibold))
                     .foregroundStyle(palette.primaryText)
             }
 
-            if store.cards.isEmpty {
+            if visibleCards.isEmpty {
                 Text(store.statusMessage)
                     .font(.body)
                     .foregroundStyle(palette.primaryText)
@@ -50,7 +52,7 @@ struct StatusMenuContentView: View {
 
                 Spacer(minLength: 0)
 
-                if let lastUpdated = store.lastUpdated, !store.cards.isEmpty {
+                if let lastUpdated = store.lastUpdated, !visibleCards.isEmpty {
                     if store.state == .connecting {
                         ProgressView()
                             .controlSize(.small)

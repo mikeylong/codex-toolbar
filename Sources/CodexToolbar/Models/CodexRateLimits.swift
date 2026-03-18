@@ -57,7 +57,7 @@ struct GetAccountRateLimitsResponse: Codable, Equatable, Sendable {
     }
 
     func cardCandidates(
-        supportedSupplementalLimitIds: [String: String] = Self.supportedSupplementalLimitIds
+        supplementalFamilies: [SupplementalLimitFamily] = Self.supportedSupplementalFamilies
     ) -> [RateLimitCardCandidate] {
         let primarySnapshot = displaySnapshot()
         let primaryLimitId = primarySnapshot.limitId ?? Self.codexLimitId
@@ -70,19 +70,19 @@ struct GetAccountRateLimitsResponse: Codable, Equatable, Sendable {
             )
         ]
 
-        for (limitId, snapshot) in rateLimitsByLimitId ?? [:] {
-            guard let categoryLabel = supportedSupplementalLimitIds[limitId],
+        for family in supplementalFamilies {
+            guard let snapshot = rateLimitsByLimitId?[family.limitId],
                   (snapshot.primary != nil || snapshot.secondary != nil),
-                  limitId != primaryLimitId
+                  family.limitId != primaryLimitId
             else {
                 continue
             }
 
             candidates.append(
                 RateLimitCardCandidate(
-                    limitId: limitId,
+                    limitId: family.limitId,
                     limitName: snapshot.limitName,
-                    categoryLabel: categoryLabel,
+                    categoryLabel: family.categoryLabel,
                     snapshot: snapshot
                 )
             )
@@ -92,13 +92,25 @@ struct GetAccountRateLimitsResponse: Codable, Equatable, Sendable {
     }
 
     static let codexLimitId = "codex"
-    static let supportedSupplementalLimits: [(limitId: String, categoryLabel: String)] = [
-        ("codex_bengalfox", "GPT-5.3-Codex-Spark")
+    static let supportedSupplementalFamilies: [SupplementalLimitFamily] = [
+        SupplementalLimitFamily(
+            limitId: "codex_bengalfox",
+            categoryLabel: "GPT-5.3-Codex-Spark",
+            sortOrder: 1,
+            isUserToggleable: true
+        )
     ]
-    static let supportedSupplementalLimitIds = Dictionary(
-        uniqueKeysWithValues: supportedSupplementalLimits.map { ($0.limitId, $0.categoryLabel) }
-    )
-    static let supportedSupplementalLimitOrder = supportedSupplementalLimits.map { $0.limitId }
+
+    static func supplementalFamily(for limitId: String) -> SupplementalLimitFamily? {
+        supportedSupplementalFamilies.first { $0.limitId == limitId }
+    }
+}
+
+struct SupplementalLimitFamily: Equatable, Sendable {
+    let limitId: String
+    let categoryLabel: String
+    let sortOrder: Int
+    let isUserToggleable: Bool
 }
 
 struct RateLimitCardCandidate: Equatable, Sendable {

@@ -118,6 +118,14 @@ final class RateLimitStore {
         Self.makeCardSections(from: cards)
     }
 
+    func visibleCards(visibleSupplementalFamilyIDs: Set<String>) -> [RateLimitCardViewData] {
+        Self.visibleCards(from: cards, visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs)
+    }
+
+    func visibleCardSections(visibleSupplementalFamilyIDs: Set<String>) -> [RateLimitCardSectionViewData] {
+        Self.makeCardSections(from: visibleCards(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs))
+    }
+
     var statusBarText: String {
         switch state {
         case .idle, .connecting:
@@ -430,6 +438,27 @@ final class RateLimitStore {
         }
     }
 
+    static func visibleCards(
+        from cards: [RateLimitCardViewData],
+        visibleSupplementalFamilyIDs: Set<String>
+    ) -> [RateLimitCardViewData] {
+        cards.filter { card in
+            if card.familyId == GetAccountRateLimitsResponse.codexLimitId {
+                return true
+            }
+
+            guard let family = GetAccountRateLimitsResponse.supplementalFamily(for: card.familyId) else {
+                return false
+            }
+
+            if !family.isUserToggleable {
+                return true
+            }
+
+            return visibleSupplementalFamilyIDs.contains(card.familyId)
+        }
+    }
+
     private static func displayLabelOverride(
         role: WindowRole,
         limitId: String?
@@ -451,11 +480,11 @@ final class RateLimitStore {
             return 0
         }
 
-        if let index = GetAccountRateLimitsResponse.supportedSupplementalLimitOrder.firstIndex(of: familyId) {
-            return index + 1
+        if let family = GetAccountRateLimitsResponse.supplementalFamily(for: familyId) {
+            return family.sortOrder
         }
 
-        return GetAccountRateLimitsResponse.supportedSupplementalLimitOrder.count + 1
+        return GetAccountRateLimitsResponse.supportedSupplementalFamilies.count + 1
     }
 
     private static func sectionTitle(for card: RateLimitCardViewData) -> String? {
