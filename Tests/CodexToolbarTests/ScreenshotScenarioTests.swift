@@ -56,6 +56,43 @@ final class ScreenshotScenarioTests: XCTestCase {
         XCTAssertEqual(store.statusBarText, "1% Weekly")
         XCTAssertEqual(store.lastUpdated, ScreenshotScenario.multiweek.lastUpdated)
     }
+
+    func testSparkScenarioBuildsFamilySectionsWithCodexFirst() throws {
+        let scenario = try XCTUnwrap(ScreenshotScenario.named("spark"))
+        let cards = RateLimitStore.makeCards(
+            from: scenario.rateLimitsResponse,
+            now: scenario.now,
+            calendar: scenario.calendar,
+            locale: scenario.locale,
+            timeZone: scenario.timeZone
+        )
+        let sections = RateLimitStore.makeCardSections(from: cards)
+
+        XCTAssertEqual(cards.count, 4)
+        XCTAssertEqual(cards.first?.displayTitle, "GPT-5.3-Codex-Spark · 5h")
+        XCTAssertEqual(sections.map(\.familyId), ["codex", "codex_bengalfox"])
+        XCTAssertEqual(sections.map(\.title), [nil, "GPT-5.3-Codex-Spark limit"])
+        XCTAssertEqual(sections.map(\.showsTitle), [false, true])
+        XCTAssertEqual(sections[0].cards.map(\.title), ["5h", "Weekly"])
+        XCTAssertEqual(sections[1].cards.map(\.title), ["5h", "2 Week"])
+    }
+
+    func testSparkScenarioBuildsStoreFromLaunchWithoutLiveFetching() async {
+        let client = FakeScreenshotClient()
+        let store = RateLimitStore.makeShared(
+            arguments: ["CodexToolbar", "--screenshot-scenario", "spark"],
+            environment: [:],
+            clientFactory: { client }
+        )
+
+        await store.start()
+
+        XCTAssertEqual(client.loadSnapshotCallCount, 0)
+        XCTAssertEqual(store.state, .ready)
+        XCTAssertEqual(store.cardSections.map(\.title), [nil, "GPT-5.3-Codex-Spark limit"])
+        XCTAssertEqual(store.statusBarText, "18% 5h")
+        XCTAssertEqual(store.lastUpdated, ScreenshotScenario.spark.lastUpdated)
+    }
 }
 
 private final class FakeScreenshotClient: @unchecked Sendable, CodexRateLimitClient {

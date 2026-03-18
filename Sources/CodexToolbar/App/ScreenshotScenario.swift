@@ -18,11 +18,19 @@ enum ScreenshotAppearance: String, CaseIterable, Equatable, Sendable {
 struct ScreenshotScenario: Equatable, Sendable {
     let name: String
     let snapshot: CodexRateLimitsSnapshot
+    let rateLimitsByLimitId: [String: CodexRateLimitsSnapshot]?
     let now: Date
     let lastUpdated: Date
     let calendar: Calendar
     let locale: Locale
     let timeZone: TimeZone
+
+    var rateLimitsResponse: GetAccountRateLimitsResponse {
+        GetAccountRateLimitsResponse(
+            rateLimits: snapshot,
+            rateLimitsByLimitId: rateLimitsByLimitId
+        )
+    }
 
     static func named(_ name: String) -> ScreenshotScenario? {
         switch name.lowercased() {
@@ -36,6 +44,8 @@ struct ScreenshotScenario: Equatable, Sendable {
             return exhausted
         case "multiweek":
             return multiweek
+        case "spark":
+            return spark
         default:
             return nil
         }
@@ -98,6 +108,7 @@ struct ScreenshotScenario: Equatable, Sendable {
         return ScreenshotScenario(
             name: "normal",
             snapshot: snapshot(primaryUsed: 19, primaryReset: primaryReset, secondaryUsed: 10, secondaryReset: secondaryReset),
+            rateLimitsByLimitId: nil,
             now: now,
             lastUpdated: now,
             calendar: calendar,
@@ -113,6 +124,7 @@ struct ScreenshotScenario: Equatable, Sendable {
         return ScreenshotScenario(
             name: "warning",
             snapshot: snapshot(primaryUsed: 74, primaryReset: primaryReset, secondaryUsed: 41, secondaryReset: secondaryReset),
+            rateLimitsByLimitId: nil,
             now: now,
             lastUpdated: now,
             calendar: calendar,
@@ -128,6 +140,7 @@ struct ScreenshotScenario: Equatable, Sendable {
         return ScreenshotScenario(
             name: "critical",
             snapshot: snapshot(primaryUsed: 94, primaryReset: primaryReset, secondaryUsed: 84, secondaryReset: secondaryReset),
+            rateLimitsByLimitId: nil,
             now: now,
             lastUpdated: now,
             calendar: calendar,
@@ -143,6 +156,7 @@ struct ScreenshotScenario: Equatable, Sendable {
         return ScreenshotScenario(
             name: "exhausted",
             snapshot: snapshot(primaryUsed: 100, primaryReset: primaryReset, secondaryUsed: 91, secondaryReset: secondaryReset),
+            rateLimitsByLimitId: nil,
             now: now,
             lastUpdated: now,
             calendar: calendar,
@@ -164,6 +178,41 @@ struct ScreenshotScenario: Equatable, Sendable {
                 secondaryReset: secondaryReset,
                 secondaryDurationMinutes: 10081
             ),
+            rateLimitsByLimitId: nil,
+            now: now,
+            lastUpdated: now,
+            calendar: calendar,
+            locale: locale,
+            timeZone: pacificTimeZone
+        )
+    }()
+
+    static let spark: ScreenshotScenario = {
+        let now = date(year: 2026, month: 3, day: 10, hour: 10, minute: 22)
+        let primaryReset = date(year: 2026, month: 3, day: 10, hour: 15, minute: 7)
+        let secondaryReset = date(year: 2026, month: 3, day: 17, hour: 0, minute: 0)
+
+        return ScreenshotScenario(
+            name: "spark",
+            snapshot: snapshot(primaryUsed: 40, primaryReset: primaryReset, secondaryUsed: 50, secondaryReset: secondaryReset),
+            rateLimitsByLimitId: [
+                "codex_bengalfox": CodexRateLimitsSnapshot(
+                    credits: nil,
+                    limitId: "codex_bengalfox",
+                    limitName: "GPT-5.3-Codex-Spark",
+                    planType: .pro,
+                    primary: CodexRateLimitWindow(
+                        resetsAt: Int64(primaryReset.timeIntervalSince1970),
+                        usedPercent: 82,
+                        windowDurationMins: 300
+                    ),
+                    secondary: CodexRateLimitWindow(
+                        resetsAt: Int64(secondaryReset.timeIntervalSince1970) + 12_000,
+                        usedPercent: 15,
+                        windowDurationMins: 20_160
+                    )
+                )
+            ],
             now: now,
             lastUpdated: now,
             calendar: calendar,

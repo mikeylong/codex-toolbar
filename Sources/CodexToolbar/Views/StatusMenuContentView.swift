@@ -10,6 +10,8 @@ struct StatusMenuContentView: View {
     let openCodexAction: (() -> Void)?
 
     var body: some View {
+        let cardSections = store.cardSections
+
         VStack(alignment: .leading, spacing: 14) {
             Text("Codex rate limit status")
                 .font(.body.weight(.semibold))
@@ -27,14 +29,12 @@ struct StatusMenuContentView: View {
                     .foregroundStyle(palette.primaryText)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(store.cards.enumerated()), id: \.offset) { index, card in
-                        RateLimitCardView(card: card, palette: palette)
-
-                        if index < store.cards.count - 1 {
-                            Divider()
-                                .overlay(palette.divider)
-                                .padding(.vertical, 14)
-                        }
+                    ForEach(Array(cardSections.enumerated()), id: \.offset) { index, section in
+                        RateLimitCardSectionView(
+                            section: section,
+                            palette: palette,
+                            showsSectionDivider: index < cardSections.count - 1
+                        )
                     }
                 }
             }
@@ -82,6 +82,44 @@ struct StatusMenuContentView: View {
     }
 }
 
+private struct RateLimitCardSectionView: View {
+    let section: RateLimitCardSectionViewData
+    let palette: StatusMenuPalette
+    let showsSectionDivider: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if section.isGrouped, section.showsTitle, let title = section.title {
+                Text(title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(palette.primaryText)
+                    .padding(.bottom, 10)
+            }
+
+            ForEach(Array(section.cards.enumerated()), id: \.offset) { index, card in
+                RateLimitCardView(
+                    card: card,
+                    palette: palette,
+                    isGroupedByFamily: section.isGrouped,
+                    showsStatusMessage: true
+                )
+
+                if index < section.cards.count - 1 {
+                    Divider()
+                        .overlay(palette.divider)
+                        .padding(.vertical, 14)
+                }
+            }
+        }
+
+        if showsSectionDivider {
+            Divider()
+                .overlay(palette.divider)
+                .padding(.vertical, 14)
+        }
+    }
+}
+
 private struct FooterActionButton: View {
     let title: String
     let palette: StatusMenuPalette
@@ -126,17 +164,19 @@ private struct FooterActionButtonStyle: ButtonStyle {
 private struct RateLimitCardView: View {
     let card: RateLimitCardViewData
     let palette: StatusMenuPalette
+    let isGroupedByFamily: Bool
+    let showsStatusMessage: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            if let statusMessage = card.statusMessage {
-                Label(statusMessage, systemImage: statusIcon)
+            if showsStatusMessage, let statusMessage = card.statusMessage {
+                Label(statusMessage, systemImage: statusIconName(for: card.progressState))
                     .font(.body.weight(.semibold))
                     .foregroundStyle(palette.primaryText)
             }
 
-            Text(card.title)
-                .font(.body.weight(card.isPrimary ? .semibold : .regular))
+            Text(card.popoverTitle(isGroupedByFamily: isGroupedByFamily))
+                .font(.body.weight(isGroupedByFamily || card.isPrimary ? .semibold : .regular))
                 .foregroundStyle(palette.primaryText)
 
             RateLimitProgressBar(card: card, palette: palette)
@@ -160,16 +200,16 @@ private struct RateLimitCardView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(card.accessibilityLabel)
     }
+}
 
-    private var statusIcon: String {
-        switch card.progressState {
-        case .normal:
-            return "chart.bar"
-        case .warning, .critical:
-            return "exclamationmark.triangle.fill"
-        case .exhausted:
-            return "xmark.octagon.fill"
-        }
+private func statusIconName(for progressState: RateLimitProgressState) -> String {
+    switch progressState {
+    case .normal:
+        return "chart.bar"
+    case .warning, .critical:
+        return "exclamationmark.triangle.fill"
+    case .exhausted:
+        return "xmark.octagon.fill"
     }
 }
 

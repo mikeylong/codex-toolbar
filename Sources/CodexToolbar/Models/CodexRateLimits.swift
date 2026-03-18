@@ -55,6 +55,65 @@ struct GetAccountRateLimitsResponse: Codable, Equatable, Sendable {
 
         return rateLimits
     }
+
+    func cardCandidates(
+        supportedSupplementalLimitIds: [String: String] = Self.supportedSupplementalLimitIds
+    ) -> [RateLimitCardCandidate] {
+        let primarySnapshot = displaySnapshot()
+        let primaryLimitId = primarySnapshot.limitId ?? Self.codexLimitId
+        var candidates: [RateLimitCardCandidate] = [
+            RateLimitCardCandidate(
+                limitId: primaryLimitId,
+                limitName: primarySnapshot.limitName,
+                categoryLabel: nil,
+                snapshot: primarySnapshot
+            )
+        ]
+
+        for (limitId, snapshot) in rateLimitsByLimitId ?? [:] {
+            guard let categoryLabel = supportedSupplementalLimitIds[limitId],
+                  (snapshot.primary != nil || snapshot.secondary != nil),
+                  limitId != primaryLimitId
+            else {
+                continue
+            }
+
+            candidates.append(
+                RateLimitCardCandidate(
+                    limitId: limitId,
+                    limitName: snapshot.limitName,
+                    categoryLabel: categoryLabel,
+                    snapshot: snapshot
+                )
+            )
+        }
+
+        return candidates
+    }
+
+    static let codexLimitId = "codex"
+    static let supportedSupplementalLimits: [(limitId: String, categoryLabel: String)] = [
+        ("codex_bengalfox", "GPT-5.3-Codex-Spark")
+    ]
+    static let supportedSupplementalLimitIds = Dictionary(
+        uniqueKeysWithValues: supportedSupplementalLimits.map { ($0.limitId, $0.categoryLabel) }
+    )
+    static let supportedSupplementalLimitOrder = supportedSupplementalLimits.map { $0.limitId }
+}
+
+struct RateLimitCardCandidate: Equatable, Sendable {
+    let limitId: String
+    let limitName: String?
+    let categoryLabel: String?
+    let snapshot: CodexRateLimitsSnapshot
+}
+
+struct RateLimitCardSectionViewData: Equatable, Sendable {
+    let familyId: String
+    let title: String?
+    let cards: [RateLimitCardViewData]
+    let isGrouped: Bool
+    let showsTitle: Bool
 }
 
 struct GetAccountResponse: Codable, Equatable, Sendable {
@@ -126,6 +185,7 @@ enum RateLimitProgressState: Equatable, Sendable {
 struct RateLimitCardViewData: Equatable, Sendable {
     let title: String
     let compactLabel: String
+    let windowDurationMins: Int?
     let usedPercent: Int
     let remainingPercent: Int
     let usageText: String
@@ -134,12 +194,14 @@ struct RateLimitCardViewData: Equatable, Sendable {
     let combinedResetText: String
     let progressState: RateLimitProgressState
     let isPrimary: Bool
+    let familyId: String
+    let categoryLabel: String?
     let statusMessage: String?
     let resetDate: Date?
 
     var accessibilityLabel: String {
         var parts = [
-            title,
+            displayTitle,
             "\(usedPercent)% used",
             "\(remainingPercent)% remaining",
             combinedResetText
@@ -152,9 +214,26 @@ struct RateLimitCardViewData: Equatable, Sendable {
         return parts.joined(separator: ". ")
     }
 
+    var displayTitle: String {
+        guard let categoryLabel else {
+            return title
+        }
+        return "\(categoryLabel) · \(title)"
+    }
+
+    var familyTitle: String {
+        categoryLabel ?? "Codex"
+    }
+
+    func popoverTitle(isGroupedByFamily: Bool) -> String {
+        isGroupedByFamily ? title : displayTitle
+    }
+
     init(
         window: CodexRateLimitWindow,
         displayLabelOverride: String? = nil,
+        familyId: String = GetAccountRateLimitsResponse.codexLimitId,
+        categoryLabel: String? = nil,
         isPrimary: Bool = false,
         now: Date = Date(),
         calendar: Calendar = .current,
@@ -168,6 +247,9 @@ struct RateLimitCardViewData: Equatable, Sendable {
             title = RateLimitFormatter.windowTitle(for: window.windowDurationMins)
             compactLabel = RateLimitFormatter.compactWindowLabel(for: window.windowDurationMins)
         }
+        windowDurationMins = window.windowDurationMins
+        self.familyId = familyId
+        self.categoryLabel = categoryLabel
         usedPercent = window.usedPercent
         remainingPercent = RateLimitFormatter.remainingPercent(fromUsedPercent: window.usedPercent)
         usageText = "\(usedPercent)% used · \(remainingPercent)% remaining"

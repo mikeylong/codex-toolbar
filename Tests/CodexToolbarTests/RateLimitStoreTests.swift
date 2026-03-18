@@ -23,6 +23,213 @@ final class RateLimitStoreTests: XCTestCase {
         XCTAssertEqual(cards[0].title, "Weekly")
     }
 
+    func testMakeCardsFromResponsePreservesLegacyOutputForCodexOnlySnapshots() {
+        let response = GetAccountRateLimitsResponse(
+            rateLimits: CodexRateLimitsSnapshot(
+                credits: nil,
+                limitId: "codex",
+                limitName: "Codex",
+                planType: .pro,
+                primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 88, windowDurationMins: 300),
+                secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 92, windowDurationMins: 10_080)
+            ),
+            rateLimitsByLimitId: nil
+        )
+
+        let cards = RateLimitStore.makeCards(from: response)
+
+        XCTAssertEqual(cards.map(\.title), ["Weekly", "5h"])
+        XCTAssertEqual(cards.map(\.compactLabel), ["Weekly", "5h"])
+    }
+
+    func testMakeCardsIncludesSparkBucketWhenPresentAndAvoidsDuplicateCodexEntries() {
+        let sparkLimitId = GetAccountRateLimitsResponse.supportedSupplementalLimitOrder.first!
+        let response = GetAccountRateLimitsResponse(
+            rateLimits: CodexRateLimitsSnapshot(
+                credits: nil,
+                limitId: "codex",
+                limitName: "Codex",
+                planType: .pro,
+                primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 40, windowDurationMins: 300),
+                secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 50, windowDurationMins: 10_080)
+            ),
+            rateLimitsByLimitId: [
+                sparkLimitId: CodexRateLimitsSnapshot(
+                    credits: nil,
+                    limitId: sparkLimitId,
+                    limitName: "GPT-5.3-Codex-Spark",
+                    planType: .pro,
+                    primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 82, windowDurationMins: 300),
+                    secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 15, windowDurationMins: 20_160)
+                ),
+                "codex": CodexRateLimitsSnapshot(
+                    credits: nil,
+                    limitId: "codex",
+                    limitName: "Codex",
+                    planType: .pro,
+                    primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 12, windowDurationMins: 300),
+                    secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 17, windowDurationMins: 10_080)
+                )
+            ]
+        )
+
+        let cards = RateLimitStore.makeCards(from: response)
+
+        XCTAssertEqual(cards.count, 4)
+        XCTAssertEqual(cards.filter { $0.displayTitle.hasPrefix("GPT-5.3-Codex-Spark · ") }.count, 2)
+        XCTAssertEqual(cards.filter { $0.displayTitle == "5h" }.count, 1)
+        XCTAssertEqual(cards.filter { $0.displayTitle == "Weekly" }.count, 1)
+    }
+
+    func testMakeCardSectionsGroupFamiliesWithCodexFirst() {
+        let sparkLimitId = GetAccountRateLimitsResponse.supportedSupplementalLimitOrder.first!
+        let response = GetAccountRateLimitsResponse(
+            rateLimits: CodexRateLimitsSnapshot(
+                credits: nil,
+                limitId: "codex",
+                limitName: "Codex",
+                planType: .pro,
+                primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 40, windowDurationMins: 300),
+                secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 50, windowDurationMins: 10_080)
+            ),
+            rateLimitsByLimitId: [
+                sparkLimitId: CodexRateLimitsSnapshot(
+                    credits: nil,
+                    limitId: sparkLimitId,
+                    limitName: "GPT-5.3-Codex-Spark",
+                    planType: .pro,
+                    primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 82, windowDurationMins: 300),
+                    secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 15, windowDurationMins: 20_160)
+                )
+            ]
+        )
+
+        let cards = RateLimitStore.makeCards(from: response)
+        let sections = RateLimitStore.makeCardSections(from: cards)
+
+        XCTAssertEqual(cards.first?.displayTitle, "GPT-5.3-Codex-Spark · 5h")
+        XCTAssertEqual(sections.map(\.familyId), ["codex", sparkLimitId])
+        XCTAssertEqual(sections.map(\.title), [nil, "GPT-5.3-Codex-Spark limit"])
+        XCTAssertEqual(sections.map(\.isGrouped), [true, true])
+        XCTAssertEqual(sections.map(\.showsTitle), [false, true])
+        XCTAssertEqual(sections[0].cards.map(\.title), ["5h", "Weekly"])
+        XCTAssertEqual(sections[1].cards.map(\.title), ["5h", "2 Week"])
+    }
+
+    func testMakeCardSectionsKeepsSingleFamilyLayoutUngrouped() {
+        let snapshot = CodexRateLimitsSnapshot(
+            credits: nil,
+            limitId: "codex",
+            limitName: "Codex",
+            planType: .pro,
+            primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 88, windowDurationMins: 300),
+            secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 92, windowDurationMins: 10_080)
+        )
+
+        let cards = RateLimitStore.makeCards(from: snapshot)
+        let sections = RateLimitStore.makeCardSections(from: cards)
+
+        XCTAssertEqual(sections.count, 1)
+        XCTAssertEqual(sections[0].familyId, "codex")
+        XCTAssertNil(sections[0].title)
+        XCTAssertFalse(sections[0].isGrouped)
+        XCTAssertFalse(sections[0].showsTitle)
+        XCTAssertEqual(sections[0].cards, cards)
+    }
+
+    func testStatusBarTextStillUsesGlobalPrimaryWhenCodexSectionIsShownFirst() {
+        let sparkLimitId = GetAccountRateLimitsResponse.supportedSupplementalLimitOrder.first!
+        let response = GetAccountRateLimitsResponse(
+            rateLimits: CodexRateLimitsSnapshot(
+                credits: nil,
+                limitId: "codex",
+                limitName: "Codex",
+                planType: .pro,
+                primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 40, windowDurationMins: 300),
+                secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 50, windowDurationMins: 10_080)
+            ),
+            rateLimitsByLimitId: [
+                sparkLimitId: CodexRateLimitsSnapshot(
+                    credits: nil,
+                    limitId: sparkLimitId,
+                    limitName: "GPT-5.3-Codex-Spark",
+                    planType: .pro,
+                    primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 82, windowDurationMins: 300),
+                    secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 15, windowDurationMins: 20_160)
+                )
+            ]
+        )
+
+        let cards = RateLimitStore.makeCards(from: response)
+        let store = RateLimitStore(
+            client: FakeCodexRateLimitClient(),
+            initialState: .ready,
+            initialCards: cards,
+            initialStatusMessage: "Rate limits remaining",
+            liveUpdatesEnabled: false
+        )
+
+        XCTAssertEqual(store.cardSections.first?.title, nil)
+        XCTAssertEqual(store.statusBarText, "18% 5h")
+    }
+
+    func testMakeCardsIgnoresSupplementalBucketsWithNoWindows() {
+        let sparkLimitId = GetAccountRateLimitsResponse.supportedSupplementalLimitOrder.first!
+        let response = GetAccountRateLimitsResponse(
+            rateLimits: CodexRateLimitsSnapshot(
+                credits: nil,
+                limitId: "codex",
+                limitName: "Codex",
+                planType: .pro,
+                primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 40, windowDurationMins: 300),
+                secondary: nil
+            ),
+            rateLimitsByLimitId: [
+                sparkLimitId: CodexRateLimitsSnapshot(
+                    credits: nil,
+                    limitId: sparkLimitId,
+                    limitName: "GPT-5.3-Codex-Spark",
+                    planType: .pro,
+                    primary: nil,
+                    secondary: nil
+                )
+            ]
+        )
+
+        let cards = RateLimitStore.makeCards(from: response)
+
+        XCTAssertEqual(cards.count, 1)
+        XCTAssertEqual(cards[0].title, "5h")
+    }
+
+    func testMakeCardsIgnoresUnknownSupplementalBucketIds() {
+        let response = GetAccountRateLimitsResponse(
+            rateLimits: CodexRateLimitsSnapshot(
+                credits: nil,
+                limitId: "codex",
+                limitName: "Codex",
+                planType: .pro,
+                primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 40, windowDurationMins: 300),
+                secondary: nil
+            ),
+            rateLimitsByLimitId: [
+                "codex_unknown": CodexRateLimitsSnapshot(
+                    credits: nil,
+                    limitId: "codex_unknown",
+                    limitName: "Unknown Spark",
+                    planType: .pro,
+                    primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 99, windowDurationMins: 300),
+                    secondary: nil
+                )
+            ]
+        )
+
+        let cards = RateLimitStore.makeCards(from: response)
+
+        XCTAssertEqual(cards.count, 1)
+        XCTAssertEqual(cards[0].title, "5h")
+    }
+
     func testMakeCardsUsesWeeklyForOffByOneCoreCodexSecondaryBucket() {
         let snapshot = CodexRateLimitsSnapshot(
             credits: nil,

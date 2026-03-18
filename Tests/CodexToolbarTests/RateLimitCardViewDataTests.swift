@@ -40,6 +40,17 @@ final class RateLimitCardViewDataTests: XCTestCase {
         XCTAssertEqual(card.compactLabel, "Weekly")
     }
 
+    func testPopoverTitleDropsCategoryPrefixWhenGroupedByFamily() {
+        let card = RateLimitCardViewData(
+            window: makeWindow(usedPercent: 16, durationMinutes: 300),
+            familyId: "codex_bengalfox",
+            categoryLabel: "GPT-5.3-Codex-Spark"
+        )
+
+        XCTAssertEqual(card.popoverTitle(isGroupedByFamily: false), "GPT-5.3-Codex-Spark · 5h")
+        XCTAssertEqual(card.popoverTitle(isGroupedByFamily: true), "5h")
+    }
+
     private func makeWindow(usedPercent: Int, durationMinutes: Int) -> CodexRateLimitWindow {
         CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: usedPercent, windowDurationMins: durationMinutes)
     }

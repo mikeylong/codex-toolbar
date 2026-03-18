@@ -114,6 +114,10 @@ final class RateLimitStore {
         await refreshNow(source: .manual)
     }
 
+    var cardSections: [RateLimitCardSectionViewData] {
+        Self.makeCardSections(from: cards)
+    }
+
     var statusBarText: String {
         switch state {
         case .idle, .connecting:
@@ -156,7 +160,7 @@ final class RateLimitStore {
                 return
             }
 
-            apply(snapshot: response.displaySnapshot())
+            apply(response)
         } catch let error as CodexAppServerError {
             await handleRefreshError(error, preserveCards: !cards.isEmpty)
         } catch {
@@ -167,7 +171,7 @@ final class RateLimitStore {
     private func handle(event: CodexAppServerEvent) async {
         switch event {
         case let .rateLimitsUpdated(response):
-            apply(snapshot: response.displaySnapshot())
+            apply(response)
         case let .disconnected(reason):
             state = .error("Disconnected from Codex.")
             statusMessage = reason ?? "Retrying…"
@@ -178,8 +182,8 @@ final class RateLimitStore {
         }
     }
 
-    private func apply(snapshot: CodexRateLimitsSnapshot) {
-        cards = Self.makeCards(from: snapshot)
+    private func apply(_ response: GetAccountRateLimitsResponse) {
+        cards = Self.makeCards(from: response)
         lastUpdated = Date()
 
         if cards.isEmpty {
@@ -302,20 +306,41 @@ final class RateLimitStore {
     }
 
     static func makeCards(
-        from snapshot: CodexRateLimitsSnapshot,
+        from response: GetAccountRateLimitsResponse,
         now: Date = Date(),
         calendar: Calendar = .current,
         locale: Locale = .current,
         timeZone: TimeZone = .current
     ) -> [RateLimitCardViewData] {
-        let windows = [
-            (window: snapshot.primary, role: WindowRole.primary),
-            (window: snapshot.secondary, role: WindowRole.secondary)
-        ].compactMap { entry in
-            entry.window.map { (window: $0, role: entry.role) }
+        let cardEntries = response.cardCandidates().flatMap { candidate -> [(window: CodexRateLimitWindow, role: WindowRole, categoryLabel: String?, limitId: String)] in
+            var entries: [(window: CodexRateLimitWindow, role: WindowRole, categoryLabel: String?, limitId: String)] = []
+
+            if let primary = candidate.snapshot.primary {
+                entries.append(
+                    (
+                        window: primary,
+                        role: .primary,
+                        categoryLabel: candidate.categoryLabel,
+                        limitId: candidate.limitId
+                    )
+                )
+            }
+
+            if let secondary = candidate.snapshot.secondary {
+                entries.append(
+                    (
+                        window: secondary,
+                        role: .secondary,
+                        categoryLabel: candidate.categoryLabel,
+                        limitId: candidate.limitId
+                    )
+                )
+            }
+
+            return entries
         }
 
-        let sorted = windows.sorted {
+        let sorted = cardEntries.sorted {
             if $0.window.usedPercent == $1.window.usedPercent {
                 return ($0.window.windowDurationMins ?? .max) < ($1.window.windowDurationMins ?? .max)
             }
@@ -327,8 +352,10 @@ final class RateLimitStore {
                 window: entry.window,
                 displayLabelOverride: displayLabelOverride(
                     role: entry.role,
-                    snapshot: snapshot
+                    limitId: entry.limitId
                 ),
+                familyId: entry.limitId,
+                categoryLabel: entry.categoryLabel,
                 isPrimary: index == 0,
                 now: now,
                 calendar: calendar,
@@ -338,11 +365,72 @@ final class RateLimitStore {
         }
     }
 
+    static func makeCards(
+        from snapshot: CodexRateLimitsSnapshot,
+        now: Date = Date(),
+        calendar: Calendar = .current,
+        locale: Locale = .current,
+        timeZone: TimeZone = .current
+    ) -> [RateLimitCardViewData] {
+        return makeCards(
+            from: GetAccountRateLimitsResponse(rateLimits: snapshot, rateLimitsByLimitId: nil),
+            now: now,
+            calendar: calendar,
+            locale: locale,
+            timeZone: timeZone
+        )
+    }
+
+    static func makeCardSections(from cards: [RateLimitCardViewData]) -> [RateLimitCardSectionViewData] {
+        guard !cards.isEmpty else {
+            return []
+        }
+
+        let groupedCards = Dictionary(grouping: cards, by: \.familyId)
+        guard groupedCards.count > 1 else {
+            let familyId = cards.first?.familyId ?? GetAccountRateLimitsResponse.codexLimitId
+            return [
+                RateLimitCardSectionViewData(
+                    familyId: familyId,
+                    title: nil,
+                    cards: cards,
+                    isGrouped: false,
+                    showsTitle: false
+                )
+            ]
+        }
+
+        let orderedFamilyIds = groupedCards.keys.sorted { lhs, rhs in
+            let lhsRank = familySortRank(for: lhs)
+            let rhsRank = familySortRank(for: rhs)
+
+            if lhsRank == rhsRank {
+                return lhs < rhs
+            }
+
+            return lhsRank < rhsRank
+        }
+
+        return orderedFamilyIds.compactMap { familyId in
+            guard let sectionCards = groupedCards[familyId], let firstCard = sectionCards.first else {
+                return nil
+            }
+
+            return RateLimitCardSectionViewData(
+                familyId: familyId,
+                title: sectionTitle(for: firstCard),
+                cards: sortCardsForPopoverSection(sectionCards),
+                isGrouped: true,
+                showsTitle: familyId != GetAccountRateLimitsResponse.codexLimitId
+            )
+        }
+    }
+
     private static func displayLabelOverride(
         role: WindowRole,
-        snapshot: CodexRateLimitsSnapshot
+        limitId: String?
     ) -> String? {
-        guard snapshot.limitId == "codex" else {
+        guard limitId == GetAccountRateLimitsResponse.codexLimitId else {
             return nil
         }
 
@@ -354,6 +442,62 @@ final class RateLimitStore {
         }
     }
 
+    private static func familySortRank(for familyId: String) -> Int {
+        if familyId == GetAccountRateLimitsResponse.codexLimitId {
+            return 0
+        }
+
+        if let index = GetAccountRateLimitsResponse.supportedSupplementalLimitOrder.firstIndex(of: familyId) {
+            return index + 1
+        }
+
+        return GetAccountRateLimitsResponse.supportedSupplementalLimitOrder.count + 1
+    }
+
+    private static func sectionTitle(for card: RateLimitCardViewData) -> String? {
+        guard card.familyId != GetAccountRateLimitsResponse.codexLimitId else {
+            return nil
+        }
+
+        return "\(card.familyTitle) limit"
+    }
+
+    private static func sortCardsForPopoverSection(_ cards: [RateLimitCardViewData]) -> [RateLimitCardViewData] {
+        cards.sorted { lhs, rhs in
+            let lhsRank = popoverWindowSortRank(for: lhs)
+            let rhsRank = popoverWindowSortRank(for: rhs)
+
+            if lhsRank == rhsRank {
+                let lhsDuration = lhs.windowDurationMins ?? .max
+                let rhsDuration = rhs.windowDurationMins ?? .max
+
+                if lhsDuration == rhsDuration {
+                    return lhs.usedPercent > rhs.usedPercent
+                }
+
+                return lhsDuration < rhsDuration
+            }
+
+            return lhsRank < rhsRank
+        }
+    }
+
+    private static func popoverWindowSortRank(for card: RateLimitCardViewData) -> Int {
+        guard let duration = card.windowDurationMins else {
+            return 3
+        }
+
+        if duration == 300 {
+            return 0
+        }
+
+        if (10_079...10_081).contains(duration) {
+            return 1
+        }
+
+        return 2
+    }
+
     static func makeShared(
         arguments: [String] = ProcessInfo.processInfo.arguments,
         environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -361,7 +505,7 @@ final class RateLimitStore {
     ) -> RateLimitStore {
         if let launchConfiguration = ScreenshotLaunchConfiguration.current(arguments: arguments, environment: environment) {
             let cards = makeCards(
-                from: launchConfiguration.scenario.snapshot,
+                from: launchConfiguration.scenario.rateLimitsResponse,
                 now: launchConfiguration.scenario.now,
                 calendar: launchConfiguration.scenario.calendar,
                 locale: launchConfiguration.scenario.locale,
