@@ -90,7 +90,7 @@ final class ScreenshotScenarioTests: XCTestCase {
         XCTAssertEqual(client.loadSnapshotCallCount, 0)
         XCTAssertEqual(store.state, .ready)
         XCTAssertEqual(store.cardSections.map(\.title), [nil, "GPT-5.3-Codex-Spark limit"])
-        XCTAssertEqual(store.statusBarText, "18% 5h")
+        XCTAssertEqual(store.statusBarText, "50% Weekly")
         XCTAssertEqual(store.lastUpdated, ScreenshotScenario.spark.lastUpdated)
     }
 }

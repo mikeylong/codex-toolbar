@@ -121,12 +121,16 @@ final class RateLimitStore {
     var statusBarText: String {
         switch state {
         case .idle, .connecting:
-            return cards.first.map { "\($0.remainingPercent)% \($0.compactLabel)" } ?? "--"
+            return preferredStatusBarCard.map { "\($0.remainingPercent)% \($0.compactLabel)" } ?? "--"
         case .ready:
-            return cards.first.map { "\($0.remainingPercent)% \($0.compactLabel)" } ?? "--"
+            return preferredStatusBarCard.map { "\($0.remainingPercent)% \($0.compactLabel)" } ?? "--"
         case .error:
             return "!"
         }
+    }
+
+    private var preferredStatusBarCard: RateLimitCardViewData? {
+        Self.preferredStatusBarCard(from: cards)
     }
 
     private enum RefreshSource {
@@ -496,6 +500,30 @@ final class RateLimitStore {
         }
 
         return 2
+    }
+
+    private static func preferredStatusBarCard(from cards: [RateLimitCardViewData]) -> RateLimitCardViewData? {
+        let codexCards = cards.filter { $0.familyId == GetAccountRateLimitsResponse.codexLimitId }
+
+        if let weeklyCard = codexCards.first(where: { $0.compactLabel == "Weekly" }) {
+            return weeklyCard
+        }
+
+        let codexCardsWithKnownDuration = codexCards.filter { $0.windowDurationMins != nil }
+        if let longestDurationCodexCard = codexCardsWithKnownDuration.max(by: { lhs, rhs in
+            let lhsDuration = lhs.windowDurationMins ?? .min
+            let rhsDuration = rhs.windowDurationMins ?? .min
+
+            if lhsDuration == rhsDuration {
+                return lhs.usedPercent < rhs.usedPercent
+            }
+
+            return lhsDuration < rhsDuration
+        }) {
+            return longestDurationCodexCard
+        }
+
+        return codexCards.first ?? cards.first
     }
 
     static func makeShared(

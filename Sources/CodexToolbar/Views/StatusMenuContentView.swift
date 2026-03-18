@@ -14,7 +14,7 @@ struct StatusMenuContentView: View {
 
         VStack(alignment: .leading, spacing: 14) {
             Text("Codex rate limit status")
-                .font(.body.weight(.semibold))
+                .font(.title3.weight(.semibold))
                 .foregroundStyle(palette.primaryText)
 
             if let staleMessage = store.staleMessage, !store.cards.isEmpty {
@@ -91,7 +91,7 @@ private struct RateLimitCardSectionView: View {
         VStack(alignment: .leading, spacing: 0) {
             if section.isGrouped, section.showsTitle, let title = section.title {
                 Text(title)
-                    .font(.body.weight(.semibold))
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(palette.primaryText)
                     .padding(.bottom, 10)
             }
@@ -252,6 +252,7 @@ struct StatusMenuPalette {
     let primaryTextColor: NSColor
     let secondaryTextColor: NSColor
     let dividerColor: NSColor
+    let renderedDividerColor: NSColor
     let progressTrackColor: NSColor
     let normalFillColor: NSColor
     let warningFillColor: NSColor
@@ -276,7 +277,7 @@ struct StatusMenuPalette {
     }
 
     var divider: Color {
-        Color(nsColor: dividerColor)
+        Color(nsColor: renderedDividerColor)
     }
 
     var progressTrack: Color {
@@ -312,6 +313,7 @@ struct StatusMenuPalette {
                 primaryTextColor: NSColor(red: 0.13, green: 0.13, blue: 0.15, alpha: 1.0),
                 secondaryTextColor: NSColor(red: 0.40, green: 0.41, blue: 0.46, alpha: 1.0),
                 dividerColor: NSColor(red: 0.79, green: 0.80, blue: 0.84, alpha: 1.0),
+                renderedDividerColor: NSColor(red: 0.88, green: 0.89, blue: 0.92, alpha: 1.0),
                 progressTrackColor: NSColor(red: 0.78, green: 0.79, blue: 0.82, alpha: 1.0),
                 normalFillColor: NSColor(red: 0.27, green: 0.27, blue: 0.29, alpha: 1.0),
                 warningFillColor: .systemOrange,
@@ -326,6 +328,7 @@ struct StatusMenuPalette {
                 primaryTextColor: NSColor(red: 0.94, green: 0.95, blue: 0.97, alpha: 1.0),
                 secondaryTextColor: NSColor(red: 0.63, green: 0.66, blue: 0.72, alpha: 1.0),
                 dividerColor: NSColor(red: 0.26, green: 0.29, blue: 0.34, alpha: 1.0),
+                renderedDividerColor: NSColor(red: 0.20, green: 0.22, blue: 0.25, alpha: 1.0),
                 progressTrackColor: NSColor(red: 0.26, green: 0.29, blue: 0.34, alpha: 1.0),
                 normalFillColor: NSColor(red: 0.86, green: 0.89, blue: 0.93, alpha: 1.0),
                 warningFillColor: .systemOrange,
@@ -340,6 +343,7 @@ struct StatusMenuPalette {
                 primaryTextColor: .labelColor,
                 secondaryTextColor: .secondaryLabelColor,
                 dividerColor: .separatorColor,
+                renderedDividerColor: liveDividerColor(for: colorScheme),
                 progressTrackColor: .quaternaryLabelColor,
                 normalFillColor: .labelColor,
                 warningFillColor: .systemOrange,
@@ -356,6 +360,15 @@ struct StatusMenuPalette {
             return NSColor(white: 1.0, alpha: 0.12)
         default:
             return NSColor(white: 0.0, alpha: 0.12)
+        }
+    }
+
+    private static func liveDividerColor(for colorScheme: ColorScheme) -> NSColor {
+        switch colorScheme {
+        case .dark:
+            return NSColor(white: 0.20, alpha: 1.0)
+        default:
+            return NSColor(white: 0.86, alpha: 1.0)
         }
     }
 }

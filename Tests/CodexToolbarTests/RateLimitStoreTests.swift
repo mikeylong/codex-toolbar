@@ -137,7 +137,7 @@ final class RateLimitStoreTests: XCTestCase {
         XCTAssertEqual(sections[0].cards, cards)
     }
 
-    func testStatusBarTextStillUsesGlobalPrimaryWhenCodexSectionIsShownFirst() {
+    func testStatusBarTextPrefersCodexWeeklyWhenSparkHasHigherUsage() {
         let sparkLimitId = GetAccountRateLimitsResponse.supportedSupplementalLimitOrder.first!
         let response = GetAccountRateLimitsResponse(
             rateLimits: CodexRateLimitsSnapshot(
@@ -170,7 +170,51 @@ final class RateLimitStoreTests: XCTestCase {
         )
 
         XCTAssertEqual(store.cardSections.first?.title, nil)
-        XCTAssertEqual(store.statusBarText, "18% 5h")
+        XCTAssertEqual(store.statusBarText, "50% Weekly")
+    }
+
+    func testStatusBarTextFallsBackToLongestCodexDurationWhenWeeklyIsMissing() {
+        let cards = [
+            RateLimitCardViewData(
+                window: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 12, windowDurationMins: 300),
+                familyId: "codex"
+            ),
+            RateLimitCardViewData(
+                window: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 41, windowDurationMins: 2_880),
+                familyId: "codex"
+            )
+        ]
+        let store = RateLimitStore(
+            client: FakeCodexRateLimitClient(),
+            initialState: .ready,
+            initialCards: cards,
+            initialStatusMessage: "Rate limits remaining",
+            liveUpdatesEnabled: false
+        )
+
+        XCTAssertEqual(store.statusBarText, "59% 2 Day")
+    }
+
+    func testStatusBarTextFallsBackToFirstCardWhenNoCodexFamilyExists() {
+        let cards = RateLimitStore.makeCards(
+            from: CodexRateLimitsSnapshot(
+                credits: nil,
+                limitId: "codex_unknown",
+                limitName: "Unexpected Limit",
+                planType: .pro,
+                primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 73, windowDurationMins: 300),
+                secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 21, windowDurationMins: 1_440)
+            )
+        )
+        let store = RateLimitStore(
+            client: FakeCodexRateLimitClient(),
+            initialState: .ready,
+            initialCards: cards,
+            initialStatusMessage: "Rate limits remaining",
+            liveUpdatesEnabled: false
+        )
+
+        XCTAssertEqual(store.statusBarText, "27% 5h")
     }
 
     func testMakeCardsIgnoresSupplementalBucketsWithNoWindows() {
