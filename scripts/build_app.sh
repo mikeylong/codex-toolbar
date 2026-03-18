@@ -9,6 +9,13 @@ CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
+plist_value() {
+  local plist_path="$1"
+  local key="$2"
+
+  /usr/libexec/PlistBuddy -c "Print :$key" "$plist_path"
+}
+
 is_module_cache_path_mismatch() {
   local log_file="$1"
 
@@ -49,6 +56,25 @@ build_release_binary() {
   rm -f "$log_file"
 }
 
+verify_bundled_version_matches_source() {
+  local source_plist="$ROOT_DIR/Resources/Info.plist"
+  local bundled_plist="$CONTENTS_DIR/Info.plist"
+  local source_short_version bundled_short_version
+  local source_bundle_version bundled_bundle_version
+
+  source_short_version="$(plist_value "$source_plist" CFBundleShortVersionString)"
+  bundled_short_version="$(plist_value "$bundled_plist" CFBundleShortVersionString)"
+  source_bundle_version="$(plist_value "$source_plist" CFBundleVersion)"
+  bundled_bundle_version="$(plist_value "$bundled_plist" CFBundleVersion)"
+
+  if [[ "$source_short_version" != "$bundled_short_version" || "$source_bundle_version" != "$bundled_bundle_version" ]]; then
+    echo "Bundled app version mismatch." >&2
+    echo "Source Info.plist: version $source_short_version ($source_bundle_version)" >&2
+    echo "Built app bundle: version $bundled_short_version ($bundled_bundle_version)" >&2
+    return 1
+  fi
+}
+
 cd "$ROOT_DIR"
 build_release_binary
 BUILD_DIR="$(swift build -c release --show-bin-path)"
@@ -62,6 +88,7 @@ cp "$ROOT_DIR/Resources/Codex.icns" "$RESOURCES_DIR/Codex.icns"
 find "$BUILD_DIR" -maxdepth 1 -name '*.bundle' -exec cp -R {} "$RESOURCES_DIR/" \;
 
 chmod +x "$MACOS_DIR/$APP_NAME"
+verify_bundled_version_matches_source
 
 if command -v codesign >/dev/null 2>&1; then
   codesign --force --sign - "$APP_DIR" >/dev/null 2>&1 || true
