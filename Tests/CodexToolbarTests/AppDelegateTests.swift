@@ -139,6 +139,32 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertEqual(view.visibleSupplementalFamilyIDs, ["codex_bengalfox"])
     }
 
+    func testReadyStatusItemImageKeepsGlyphTintStableWhileBarColorChanges() throws {
+        let palette = StatusMenuPalette.forAppearance(.light, colorScheme: .light)
+        let appearance = try XCTUnwrap(NSAppearance(named: .aqua))
+
+        let warningImage = AppDelegate.readyStatusItemImage(
+            bar: .init(remainingPercent: 18, progressState: .warning),
+            appearance: appearance,
+            glyphColor: palette.statusItemGlyphColor,
+            trackColor: palette.trackColor(for: .warning),
+            fillColor: palette.fillColor(for: .warning)
+        )
+        let criticalImage = AppDelegate.readyStatusItemImage(
+            bar: .init(remainingPercent: 8, progressState: .critical),
+            appearance: appearance,
+            glyphColor: palette.statusItemGlyphColor,
+            trackColor: palette.trackColor(for: .critical),
+            fillColor: palette.fillColor(for: .critical)
+        )
+
+        let glyphRegion = NSRect(x: 0, y: 0, width: 16, height: 16)
+        let barRegion = NSRect(x: 20, y: 0, width: 44, height: 16)
+
+        XCTAssertEqual(try pixelData(for: warningImage, in: glyphRegion), try pixelData(for: criticalImage, in: glyphRegion))
+        XCTAssertNotEqual(try pixelData(for: warningImage, in: barRegion), try pixelData(for: criticalImage, in: barRegion))
+    }
+
     private func makeDelegate(
         installedApplicationURL: URL?,
         preferences: ToolbarPreferences,
@@ -188,6 +214,44 @@ final class AppDelegateTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
+    }
+
+    private func pixelData(for image: NSImage, in region: NSRect) throws -> Data {
+        let pixelsWide = Int(image.size.width)
+        let pixelsHigh = Int(image.size.height)
+        let bitmap = try XCTUnwrap(
+            NSBitmapImageRep(
+                bitmapDataPlanes: nil,
+                pixelsWide: pixelsWide,
+                pixelsHigh: pixelsHigh,
+                bitsPerSample: 8,
+                samplesPerPixel: 4,
+                hasAlpha: true,
+                isPlanar: false,
+                colorSpaceName: .deviceRGB,
+                bytesPerRow: 0,
+                bitsPerPixel: 0
+            )
+        )
+
+        bitmap.size = image.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        image.draw(in: NSRect(origin: .zero, size: image.size))
+        NSGraphicsContext.restoreGraphicsState()
+
+        var bytes: [UInt8] = []
+        for y in Int(region.minY)..<Int(region.maxY) {
+            for x in Int(region.minX)..<Int(region.maxX) {
+                let color = try XCTUnwrap(bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB))
+                bytes.append(UInt8((color.redComponent * 255).rounded()))
+                bytes.append(UInt8((color.greenComponent * 255).rounded()))
+                bytes.append(UInt8((color.blueComponent * 255).rounded()))
+                bytes.append(UInt8((color.alphaComponent * 255).rounded()))
+            }
+        }
+
+        return Data(bytes)
     }
 }
 

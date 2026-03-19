@@ -7,6 +7,49 @@ enum RateLimitFormatter {
         max(0, 100 - usedPercent)
     }
 
+    static func statusBarWindowLabel(for minutes: Int?) -> String {
+        guard let minutes else {
+            return "Limit"
+        }
+
+        let normalizedMinutes = normalizedWindowMinutes(minutes)
+
+        switch normalizedMinutes {
+        case 10080:
+            return "Week"
+        case let value where value % 10080 == 0:
+            return "\(value / 10080)w"
+        case let value where value % 1440 == 0:
+            return "\(value / 1440)d"
+        case let value where value % 60 == 0:
+            return "\(value / 60)h"
+        default:
+            return "\(normalizedMinutes)m"
+        }
+    }
+
+    static func statusBarStateLabel(forRemainingPercent remainingPercent: Int) -> String {
+        switch RateLimitProgressState(remainingPercent: remainingPercent) {
+        case .normal:
+            return "Open"
+        case .warning:
+            return "Caution"
+        case .critical:
+            return "Tight"
+        case .exhausted:
+            return "Out"
+        }
+    }
+
+    static func statusBarText(windowDurationMins: Int?, remainingPercent: Int) -> String {
+        "\(statusBarWindowLabel(for: windowDurationMins)): \(statusBarStateLabel(forRemainingPercent: remainingPercent))"
+    }
+
+    static func statusBarAccessibilityDescription(windowDurationMins: Int?, remainingPercent: Int) -> String {
+        let stateLabel = statusBarStateLabel(forRemainingPercent: remainingPercent).lowercased()
+        return "\(accessibilityWindowDescription(for: windowDurationMins)) status \(stateLabel). \(remainingPercent)% remaining."
+    }
+
     static func compactWindowLabel(for minutes: Int?) -> String {
         guard let minutes else {
             return "Limit"
@@ -153,5 +196,26 @@ enum RateLimitFormatter {
         }
 
         return snappedMinutes
+    }
+
+    private static func accessibilityWindowDescription(for minutes: Int?) -> String {
+        guard let minutes else {
+            return "Rate limit window"
+        }
+
+        let normalizedMinutes = normalizedWindowMinutes(minutes)
+
+        switch normalizedMinutes {
+        case 10080:
+            return "Weekly limit"
+        case let value where value % 10080 == 0:
+            return "\(value / 10080)-week limit"
+        case let value where value % 1440 == 0:
+            return "\(value / 1440)-day limit"
+        case let value where value % 60 == 0:
+            return "\(value / 60)-hour limit"
+        default:
+            return "\(normalizedMinutes)-minute limit"
+        }
     }
 }

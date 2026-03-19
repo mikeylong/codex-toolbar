@@ -34,6 +34,36 @@ final class StatusMenuContentViewTests: XCTestCase {
         XCTAssertEqual(actionTextColor.alphaComponent, 1.0, accuracy: 0.01)
     }
 
+    func testLightScreenshotPaletteUsesStableNeutralStatusItemGlyphColor() throws {
+        let palette = StatusMenuPalette.forAppearance(.light, colorScheme: .light)
+        let glyphColor = try XCTUnwrap(palette.statusItemGlyphColor.usingColorSpace(.deviceRGB))
+        let warningFillColor = try XCTUnwrap(palette.fillColor(for: .warning).usingColorSpace(.deviceRGB))
+        let criticalFillColor = try XCTUnwrap(palette.fillColor(for: .critical).usingColorSpace(.deviceRGB))
+
+        XCTAssertEqual(glyphColor.redComponent, 0.27, accuracy: 0.01)
+        XCTAssertEqual(glyphColor.greenComponent, 0.27, accuracy: 0.01)
+        XCTAssertEqual(glyphColor.blueComponent, 0.29, accuracy: 0.01)
+        XCTAssertEqual(glyphColor.alphaComponent, 1.0, accuracy: 0.01)
+        XCTAssertFalse(glyphColor.isEqual(warningFillColor))
+        XCTAssertFalse(glyphColor.isEqual(criticalFillColor))
+        XCTAssertTrue(palette.fillColor(for: .critical).isEqual(palette.fillColor(for: .exhausted)))
+    }
+
+    func testDarkScreenshotPaletteUsesStableNeutralStatusItemGlyphColor() throws {
+        let palette = StatusMenuPalette.forAppearance(.dark, colorScheme: .dark)
+        let glyphColor = try XCTUnwrap(palette.statusItemGlyphColor.usingColorSpace(.deviceRGB))
+        let warningFillColor = try XCTUnwrap(palette.fillColor(for: .warning).usingColorSpace(.deviceRGB))
+        let criticalFillColor = try XCTUnwrap(palette.fillColor(for: .critical).usingColorSpace(.deviceRGB))
+
+        XCTAssertEqual(glyphColor.redComponent, 0.86, accuracy: 0.01)
+        XCTAssertEqual(glyphColor.greenComponent, 0.89, accuracy: 0.01)
+        XCTAssertEqual(glyphColor.blueComponent, 0.93, accuracy: 0.01)
+        XCTAssertEqual(glyphColor.alphaComponent, 1.0, accuracy: 0.01)
+        XCTAssertFalse(glyphColor.isEqual(warningFillColor))
+        XCTAssertFalse(glyphColor.isEqual(criticalFillColor))
+        XCTAssertTrue(palette.fillColor(for: .critical).isEqual(palette.fillColor(for: .exhausted)))
+    }
+
     func testLightScreenshotPaletteUsesDarkActionText() throws {
         let palette = StatusMenuPalette.forAppearance(.light, colorScheme: .dark)
         let actionTextColor = try XCTUnwrap(palette.actionTextColor.usingColorSpace(.deviceRGB))

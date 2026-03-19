@@ -126,7 +126,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func observeState() {
         withObservationTracking {
+            _ = store.statusItemPresentation
             _ = store.statusBarText
+            _ = store.statusBarAccessibilityText
             _ = store.state
             _ = store.statusMessage
             _ = store.cards.count
@@ -143,11 +145,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateStatusItem() {
         guard let button = statusItem?.button else { return }
-        button.image = Self.statusItemImage()
-        button.imagePosition = .imageLeading
-        button.imageScaling = .scaleProportionallyDown
-        button.title = store.statusBarText
-        button.setAccessibilityLabel("Codex toolbar, \(store.statusBarText)")
+
+        switch store.statusItemPresentation {
+        case let .text(text):
+            button.image = Self.statusItemImage()
+            button.imagePosition = .imageLeading
+            button.imageScaling = .scaleProportionallyDown
+            button.title = text
+        case let .bar(bar):
+            let palette = statusItemPalette(for: button)
+            button.image = Self.readyStatusItemImage(
+                bar: bar,
+                appearance: button.effectiveAppearance,
+                glyphColor: palette.statusItemGlyphColor,
+                trackColor: palette.trackColor(for: bar.progressState),
+                fillColor: palette.fillColor(for: bar.progressState)
+            )
+            button.imagePosition = .imageOnly
+            button.imageScaling = .scaleNone
+            button.title = ""
+        }
+
+        button.setAccessibilityLabel("Codex toolbar. \(store.statusBarAccessibilityText)")
         button.sizeToFit()
     }
 
@@ -346,6 +365,106 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fallback.isTemplate = true
         fallback.size = NSSize(width: 16, height: 16)
         return fallback
+    }
+
+    private func statusItemPalette(for button: NSStatusBarButton) -> StatusMenuPalette {
+        let colorScheme = Self.colorScheme(for: button.effectiveAppearance)
+        return StatusMenuPalette.forAppearance(screenshotConfiguration?.appearance, colorScheme: colorScheme)
+    }
+
+    private static func colorScheme(for appearance: NSAppearance) -> ColorScheme {
+        switch appearance.bestMatch(from: [.darkAqua, .aqua]) {
+        case .darkAqua:
+            return .dark
+        default:
+            return .light
+        }
+    }
+
+    static func readyStatusItemImage(
+        bar: RateLimitStore.StatusItemBarPresentation,
+        appearance: NSAppearance,
+        glyphColor: NSColor,
+        trackColor: NSColor,
+        fillColor: NSColor
+    ) -> NSImage {
+        let glyphSize = NSSize(width: 16, height: 16)
+        let gap: CGFloat = 4
+        let barSize = NSSize(width: 44, height: 6)
+        let imageSize = NSSize(width: glyphSize.width + gap + barSize.width, height: glyphSize.height)
+        let image = NSImage(size: imageSize)
+        let glyphRect = NSRect(
+            x: 0,
+            y: (imageSize.height - glyphSize.height) / 2,
+            width: glyphSize.width,
+            height: glyphSize.height
+        )
+        let barRect = NSRect(
+            x: glyphSize.width + gap,
+            y: (imageSize.height - barSize.height) / 2,
+            width: barSize.width,
+            height: barSize.height
+        )
+
+        appearance.performAsCurrentDrawingAppearance {
+            image.lockFocus()
+            drawTintedGlyph(in: glyphRect, color: glyphColor)
+            drawBar(
+                in: barRect,
+                remainingPercent: bar.remainingPercent,
+                trackColor: trackColor,
+                fillColor: fillColor
+            )
+            image.unlockFocus()
+        }
+        image.isTemplate = false
+
+        return image
+    }
+
+    private static func drawTintedGlyph(in rect: NSRect, color: NSColor) {
+        let glyphImage = statusItemImage()
+        let tintedGlyph = NSImage(size: glyphImage.size)
+
+        tintedGlyph.lockFocus()
+        glyphImage.draw(in: NSRect(origin: .zero, size: glyphImage.size))
+        color.set()
+        NSRect(origin: .zero, size: glyphImage.size).fill(using: .sourceAtop)
+        tintedGlyph.unlockFocus()
+        tintedGlyph.draw(in: rect)
+    }
+
+    private static func drawBar(
+        in rect: NSRect,
+        remainingPercent: Int,
+        trackColor: NSColor,
+        fillColor: NSColor
+    ) {
+        let radius = rect.height / 2
+        let trackPath = NSBezierPath(
+            roundedRect: rect,
+            xRadius: radius,
+            yRadius: radius
+        )
+        trackColor.setFill()
+        trackPath.fill()
+
+        guard remainingPercent > 0 else {
+            return
+        }
+
+        let fillWidth = min(
+            rect.width,
+            max(rect.width * CGFloat(remainingPercent) / 100, 2)
+        )
+        let fillRect = NSRect(x: rect.minX, y: rect.minY, width: fillWidth, height: rect.height)
+        let fillPath = NSBezierPath(
+            roundedRect: fillRect,
+            xRadius: min(radius, fillRect.width / 2),
+            yRadius: radius
+        )
+        fillColor.setFill()
+        fillPath.fill()
     }
 
     private func scheduleScreenshotCaptureIfNeeded() {

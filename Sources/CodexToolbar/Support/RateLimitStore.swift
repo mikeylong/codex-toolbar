@@ -22,6 +22,16 @@ final class RateLimitStore {
         case error(String)
     }
 
+    struct StatusItemBarPresentation: Equatable, Sendable {
+        let remainingPercent: Int
+        let progressState: RateLimitProgressState
+    }
+
+    enum StatusItemPresentation: Equatable, Sendable {
+        case text(String)
+        case bar(StatusItemBarPresentation)
+    }
+
     var state: State = .idle
     var cards: [RateLimitCardViewData] = []
     var statusMessage = "Connecting to Codex…"
@@ -129,11 +139,35 @@ final class RateLimitStore {
     var statusBarText: String {
         switch state {
         case .idle, .connecting:
-            return preferredStatusBarCard.map { "\($0.remainingPercent)% \($0.compactLabel)" } ?? "--"
+            return preferredStatusBarCard.map(Self.statusBarText(for:)) ?? "--"
         case .ready:
-            return preferredStatusBarCard.map { "\($0.remainingPercent)% \($0.compactLabel)" } ?? "--"
+            return preferredStatusBarCard.map(Self.statusBarText(for:)) ?? "--"
         case .error:
             return "!"
+        }
+    }
+
+    var statusItemPresentation: StatusItemPresentation {
+        switch state {
+        case .idle, .connecting, .ready:
+            guard let preferredStatusBarCard else {
+                return .text("--")
+            }
+
+            return .bar(Self.statusItemBarPresentation(for: preferredStatusBarCard))
+        case .error:
+            return .text("!")
+        }
+    }
+
+    var statusBarAccessibilityText: String {
+        switch state {
+        case .idle, .connecting:
+            return preferredStatusBarCard.map(Self.statusBarAccessibilityText(for:)) ?? "Loading rate limits."
+        case .ready:
+            return preferredStatusBarCard.map(Self.statusBarAccessibilityText(for:)) ?? "Rate limit status unavailable."
+        case let .error(message):
+            return message
         }
     }
 
@@ -533,26 +567,40 @@ final class RateLimitStore {
 
     private static func preferredStatusBarCard(from cards: [RateLimitCardViewData]) -> RateLimitCardViewData? {
         let codexCards = cards.filter { $0.familyId == GetAccountRateLimitsResponse.codexLimitId }
-
-        if let weeklyCard = codexCards.first(where: { $0.compactLabel == "Weekly" }) {
-            return weeklyCard
+        if let preferredCodexCard = codexCards.sorted(by: isMoreConstrainedStatusBarCard).first {
+            return preferredCodexCard
         }
 
-        let codexCardsWithKnownDuration = codexCards.filter { $0.windowDurationMins != nil }
-        if let longestDurationCodexCard = codexCardsWithKnownDuration.max(by: { lhs, rhs in
-            let lhsDuration = lhs.windowDurationMins ?? .min
-            let rhsDuration = rhs.windowDurationMins ?? .min
+        return cards.first
+    }
 
-            if lhsDuration == rhsDuration {
-                return lhs.usedPercent < rhs.usedPercent
-            }
+    private static func statusBarText(for card: RateLimitCardViewData) -> String {
+        RateLimitFormatter.statusBarText(
+            windowDurationMins: card.windowDurationMins,
+            remainingPercent: card.remainingPercent
+        )
+    }
 
-            return lhsDuration < rhsDuration
-        }) {
-            return longestDurationCodexCard
+    private static func statusBarAccessibilityText(for card: RateLimitCardViewData) -> String {
+        RateLimitFormatter.statusBarAccessibilityDescription(
+            windowDurationMins: card.windowDurationMins,
+            remainingPercent: card.remainingPercent
+        )
+    }
+
+    private static func statusItemBarPresentation(for card: RateLimitCardViewData) -> StatusItemBarPresentation {
+        StatusItemBarPresentation(
+            remainingPercent: card.remainingPercent,
+            progressState: card.progressState
+        )
+    }
+
+    private static func isMoreConstrainedStatusBarCard(_ lhs: RateLimitCardViewData, _ rhs: RateLimitCardViewData) -> Bool {
+        if lhs.usedPercent == rhs.usedPercent {
+            return (lhs.windowDurationMins ?? .max) < (rhs.windowDurationMins ?? .max)
         }
 
-        return codexCards.first ?? cards.first
+        return lhs.usedPercent > rhs.usedPercent
     }
 
     static func makeShared(

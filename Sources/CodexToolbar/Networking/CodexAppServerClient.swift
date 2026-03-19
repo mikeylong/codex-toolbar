@@ -190,7 +190,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
                 id: "1",
                 method: "initialize",
                 params: InitializeParams(
-                    clientInfo: ClientInfo(name: "CodexToolbar", version: "0.1.2"),
+                    clientInfo: ClientInfo(name: "CodexToolbar", version: "0.1.3"),
                     capabilities: InitializeCapabilities(experimentalApi: true, optOutNotificationMethods: nil)
                 )
             )),
@@ -239,7 +239,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
 
     private func sendInitializeHandshake() async throws {
         let params = InitializeParams(
-            clientInfo: ClientInfo(name: "CodexToolbar", version: "0.1.2"),
+            clientInfo: ClientInfo(name: "CodexToolbar", version: "0.1.3"),
             capabilities: InitializeCapabilities(experimentalApi: true, optOutNotificationMethods: nil)
         )
 

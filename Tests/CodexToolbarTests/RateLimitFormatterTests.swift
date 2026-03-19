@@ -3,6 +3,29 @@ import XCTest
 @testable import CodexToolbar
 
 final class RateLimitFormatterTests: XCTestCase {
+    func testStatusBarWindowLabelUsesShortenedTokens() {
+        XCTAssertEqual(RateLimitFormatter.statusBarWindowLabel(for: 10080), "Week")
+        XCTAssertEqual(RateLimitFormatter.statusBarWindowLabel(for: 10081), "Week")
+        XCTAssertEqual(RateLimitFormatter.statusBarWindowLabel(for: 20160), "2w")
+        XCTAssertEqual(RateLimitFormatter.statusBarWindowLabel(for: 2880), "2d")
+        XCTAssertEqual(RateLimitFormatter.statusBarWindowLabel(for: 300), "5h")
+        XCTAssertEqual(RateLimitFormatter.statusBarWindowLabel(for: 45), "45m")
+    }
+
+    func testStatusBarStateLabelUsesApprovedUrgencyWords() {
+        XCTAssertEqual(RateLimitFormatter.statusBarStateLabel(forRemainingPercent: 31), "Open")
+        XCTAssertEqual(RateLimitFormatter.statusBarStateLabel(forRemainingPercent: 30), "Caution")
+        XCTAssertEqual(RateLimitFormatter.statusBarStateLabel(forRemainingPercent: 10), "Tight")
+        XCTAssertEqual(RateLimitFormatter.statusBarStateLabel(forRemainingPercent: 0), "Out")
+    }
+
+    func testStatusBarAccessibilityDescriptionUsesFullPhrase() {
+        XCTAssertEqual(
+            RateLimitFormatter.statusBarAccessibilityDescription(windowDurationMins: 10080, remainingPercent: 50),
+            "Weekly limit status open. 50% remaining."
+        )
+    }
+
     func testFiveHourWindowLabel() {
         XCTAssertEqual(RateLimitFormatter.compactWindowLabel(for: 300), "5h")
         XCTAssertEqual(RateLimitFormatter.windowTitle(for: 300), "5h")

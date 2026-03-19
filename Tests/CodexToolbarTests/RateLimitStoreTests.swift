@@ -179,7 +179,12 @@ final class RateLimitStoreTests: XCTestCase {
 
         XCTAssertEqual(store.visibleCardSections(visibleSupplementalFamilyIDs: []).map(\.familyId), ["codex"])
         XCTAssertEqual(store.visibleCardSections(visibleSupplementalFamilyIDs: []).first?.cards.map(\.title), ["Weekly", "5h"])
-        XCTAssertEqual(store.statusBarText, "50% Weekly")
+        XCTAssertEqual(store.statusBarText, "Week: Open")
+        XCTAssertEqual(store.statusBarAccessibilityText, "Weekly limit status open. 50% remaining.")
+        XCTAssertEqual(
+            store.statusItemPresentation,
+            .bar(.init(remainingPercent: 50, progressState: .normal))
+        )
     }
 
     func testMakeCardSectionsKeepsSingleFamilyLayoutUngrouped() {
@@ -203,7 +208,7 @@ final class RateLimitStoreTests: XCTestCase {
         XCTAssertEqual(sections[0].cards, cards)
     }
 
-    func testStatusBarTextPrefersCodexWeeklyWhenSparkHasHigherUsage() {
+    func testStatusBarTextUsesLowestCoreCodexWindowWhenSparkHasHigherUsage() {
         let sparkLimitId = GetAccountRateLimitsResponse.supportedSupplementalFamilies.first!.limitId
         let response = GetAccountRateLimitsResponse(
             rateLimits: CodexRateLimitsSnapshot(
@@ -236,10 +241,41 @@ final class RateLimitStoreTests: XCTestCase {
         )
 
         XCTAssertEqual(store.cardSections.first?.title, nil)
-        XCTAssertEqual(store.statusBarText, "50% Weekly")
+        XCTAssertEqual(store.statusBarText, "Week: Open")
+        XCTAssertEqual(
+            store.statusItemPresentation,
+            .bar(.init(remainingPercent: 50, progressState: .normal))
+        )
     }
 
-    func testStatusBarTextFallsBackToLongestCodexDurationWhenWeeklyIsMissing() {
+    func testStatusBarTextUsesLowestRemainingFiveHourWindowWhenItIsMoreConstrainedThanWeekly() {
+        let cards = [
+            RateLimitCardViewData(
+                window: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 82, windowDurationMins: 300),
+                familyId: "codex"
+            ),
+            RateLimitCardViewData(
+                window: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 15, windowDurationMins: 10_080),
+                familyId: "codex"
+            )
+        ]
+        let store = RateLimitStore(
+            client: FakeCodexRateLimitClient(),
+            initialState: .ready,
+            initialCards: cards,
+            initialStatusMessage: "Rate limits remaining",
+            liveUpdatesEnabled: false
+        )
+
+        XCTAssertEqual(store.statusBarText, "5h: Caution")
+        XCTAssertEqual(
+            store.statusItemPresentation,
+            .bar(.init(remainingPercent: 18, progressState: .warning))
+        )
+        XCTAssertEqual(store.statusBarAccessibilityText, "5-hour limit status caution. 18% remaining.")
+    }
+
+    func testStatusBarTextFallsBackToLowestRemainingCodexDurationWhenWeeklyIsMissing() {
         let cards = [
             RateLimitCardViewData(
                 window: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 12, windowDurationMins: 300),
@@ -258,7 +294,11 @@ final class RateLimitStoreTests: XCTestCase {
             liveUpdatesEnabled: false
         )
 
-        XCTAssertEqual(store.statusBarText, "59% 2 Day")
+        XCTAssertEqual(store.statusBarText, "2d: Open")
+        XCTAssertEqual(
+            store.statusItemPresentation,
+            .bar(.init(remainingPercent: 59, progressState: .normal))
+        )
     }
 
     func testStatusBarTextFallsBackToFirstCardWhenNoCodexFamilyExists() {
@@ -280,7 +320,77 @@ final class RateLimitStoreTests: XCTestCase {
             liveUpdatesEnabled: false
         )
 
-        XCTAssertEqual(store.statusBarText, "27% 5h")
+        XCTAssertEqual(store.statusBarText, "5h: Caution")
+        XCTAssertEqual(
+            store.statusItemPresentation,
+            .bar(.init(remainingPercent: 27, progressState: .warning))
+        )
+    }
+
+    func testStatusItemPresentationUsesTextModeWhileConnectingWithoutCards() {
+        let store = RateLimitStore(
+            client: FakeCodexRateLimitClient(),
+            initialState: .connecting,
+            initialCards: [],
+            initialStatusMessage: "Connecting to Codex…",
+            liveUpdatesEnabled: false
+        )
+
+        XCTAssertEqual(store.statusItemPresentation, .text("--"))
+    }
+
+    func testStatusItemPresentationKeepsBarModeWhileConnectingWithCachedCards() {
+        let store = RateLimitStore(
+            client: FakeCodexRateLimitClient(),
+            initialState: .connecting,
+            initialCards: [
+                RateLimitCardViewData(
+                    window: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 82, windowDurationMins: 300),
+                    familyId: "codex"
+                )
+            ],
+            initialStatusMessage: "Connecting to Codex…",
+            liveUpdatesEnabled: false
+        )
+
+        XCTAssertEqual(
+            store.statusItemPresentation,
+            .bar(.init(remainingPercent: 18, progressState: .warning))
+        )
+        XCTAssertEqual(store.statusBarAccessibilityText, "5-hour limit status caution. 18% remaining.")
+    }
+
+    func testStatusItemPresentationUsesTextModeForErrors() {
+        let store = RateLimitStore(
+            client: FakeCodexRateLimitClient(),
+            initialState: .error("Codex CLI not found."),
+            initialCards: [],
+            initialStatusMessage: "Codex CLI not found.",
+            liveUpdatesEnabled: false
+        )
+
+        XCTAssertEqual(store.statusItemPresentation, .text("!"))
+    }
+
+    func testStatusItemPresentationKeepsExhaustedStateForReadyCards() {
+        let store = RateLimitStore(
+            client: FakeCodexRateLimitClient(),
+            initialState: .ready,
+            initialCards: [
+                RateLimitCardViewData(
+                    window: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 100, windowDurationMins: 300),
+                    familyId: "codex"
+                )
+            ],
+            initialStatusMessage: "Rate limits remaining",
+            liveUpdatesEnabled: false
+        )
+
+        XCTAssertEqual(store.statusBarText, "5h: Out")
+        XCTAssertEqual(
+            store.statusItemPresentation,
+            .bar(.init(remainingPercent: 0, progressState: .exhausted))
+        )
     }
 
     func testMakeCardsIgnoresSupplementalBucketsWithNoWindows() {
@@ -430,6 +540,7 @@ final class RateLimitStoreTests: XCTestCase {
         XCTAssertFalse(store.cards.isEmpty)
         XCTAssertEqual(store.staleMessage, "Codex app-server connection closed.")
         XCTAssertEqual(store.statusBarText, "!")
+        XCTAssertEqual(store.statusBarAccessibilityText, "Codex app-server connection closed.")
         XCTAssertEqual(store.lastUpdated, initialLastUpdated)
     }
 
@@ -447,6 +558,44 @@ final class RateLimitStoreTests: XCTestCase {
         await store.refreshNow()
 
         XCTAssertEqual(Array(client.readAccountRefreshTokens.dropFirst(refreshTokensBeforeManualRefresh)), [true])
+    }
+
+    func testManualRefreshKeepsBarPresentationWhileConnectingWithCachedCards() async {
+        let client = FakeCodexRateLimitClient()
+        let store = RateLimitStore(
+            client: client,
+            reconnectDelayNanoseconds: 10_000_000_000,
+            refreshDelayNanosecondsProvider: { 10_000_000_000 }
+        )
+
+        await store.start()
+        XCTAssertEqual(store.state, .ready)
+        XCTAssertEqual(
+            store.statusItemPresentation,
+            .bar(.init(remainingPercent: 8, progressState: .critical))
+        )
+
+        client.pauseNextLoadSnapshot = true
+        let refreshTask = Task { await store.refreshNow() }
+        defer {
+            client.resumeLoadSnapshot()
+        }
+
+        await waitUntil {
+            client.isLoadSnapshotPaused && store.state == .connecting
+        }
+
+        XCTAssertEqual(store.state, .connecting)
+        XCTAssertEqual(
+            store.statusItemPresentation,
+            .bar(.init(remainingPercent: 8, progressState: .critical))
+        )
+        XCTAssertEqual(store.statusBarAccessibilityText, "Weekly limit status tight. 8% remaining.")
+
+        client.resumeLoadSnapshot()
+        await refreshTask.value
+
+        XCTAssertEqual(store.state, .ready)
     }
 
     func testStartupLoggedOutPreflightShowsSignInWithoutSnapshot() async {
@@ -609,16 +758,19 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
     private lazy var stream: AsyncStream<CodexAppServerEvent> = AsyncStream { continuation in
         self.continuation = continuation
     }
+    private var loadSnapshotContinuation: CheckedContinuation<Void, Never>?
 
     private(set) var connectCallCount = 0
     private(set) var loadSnapshotCallCount = 0
     private(set) var readLoginStatusCallCount = 0
     private(set) var readRateLimitsCallCount = 0
     private(set) var readAccountRefreshTokens: [Bool] = []
+    private(set) var isLoadSnapshotPaused = false
     var failReadRateLimits: Error?
     var loadSnapshotError: Error?
     var loginStatusResults: [Result<CodexLoginStatus, Error>] = []
     var accountResponse = GetAccountResponse(account: .chatgpt(email: "mike@example.com", planType: .pro), requiresOpenaiAuth: false)
+    var pauseNextLoadSnapshot = false
     private var isConnected = false
 
     func events() -> AsyncStream<CodexAppServerEvent> {
@@ -673,6 +825,15 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
     func loadSnapshot(refreshToken: Bool) async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
         loadSnapshotCallCount += 1
 
+        if pauseNextLoadSnapshot {
+            pauseNextLoadSnapshot = false
+            isLoadSnapshotPaused = true
+            await withCheckedContinuation { continuation in
+                loadSnapshotContinuation = continuation
+            }
+            isLoadSnapshotPaused = false
+        }
+
         if let loadSnapshotError {
             throw loadSnapshotError
         }
@@ -685,5 +846,10 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
             isConnected = false
         }
         continuation?.yield(event)
+    }
+
+    func resumeLoadSnapshot() {
+        loadSnapshotContinuation?.resume()
+        loadSnapshotContinuation = nil
     }
 }

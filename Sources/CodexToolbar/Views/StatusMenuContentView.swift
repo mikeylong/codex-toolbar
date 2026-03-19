@@ -237,14 +237,7 @@ private struct RateLimitProgressBar: View {
     }
 
     private var fillColor: Color {
-        switch card.progressState {
-        case .normal:
-            return palette.normalFill
-        case .warning:
-            return palette.warningFill
-        case .critical, .exhausted:
-            return palette.criticalFill
-        }
+        Color(nsColor: palette.fillColor(for: card.progressState))
     }
 }
 
@@ -256,6 +249,7 @@ struct StatusMenuPalette {
     let dividerColor: NSColor
     let renderedDividerColor: NSColor
     let progressTrackColor: NSColor
+    let statusItemGlyphColor: NSColor
     let normalFillColor: NSColor
     let warningFillColor: NSColor
     let criticalFillColor: NSColor
@@ -298,6 +292,26 @@ struct StatusMenuPalette {
         Color(nsColor: criticalFillColor)
     }
 
+    func fillColor(for progressState: RateLimitProgressState) -> NSColor {
+        switch progressState {
+        case .normal:
+            return normalFillColor
+        case .warning:
+            return warningFillColor
+        case .critical, .exhausted:
+            return criticalFillColor
+        }
+    }
+
+    func trackColor(for progressState: RateLimitProgressState) -> NSColor {
+        switch progressState {
+        case .exhausted:
+            return criticalFillColor
+        case .normal, .warning, .critical:
+            return progressTrackColor
+        }
+    }
+
     var actionText: Color {
         Color(nsColor: actionTextColor)
     }
@@ -317,6 +331,7 @@ struct StatusMenuPalette {
                 dividerColor: NSColor(red: 0.79, green: 0.80, blue: 0.84, alpha: 1.0),
                 renderedDividerColor: NSColor(red: 0.88, green: 0.89, blue: 0.92, alpha: 1.0),
                 progressTrackColor: NSColor(red: 0.78, green: 0.79, blue: 0.82, alpha: 1.0),
+                statusItemGlyphColor: NSColor(red: 0.27, green: 0.27, blue: 0.29, alpha: 1.0),
                 normalFillColor: NSColor(red: 0.27, green: 0.27, blue: 0.29, alpha: 1.0),
                 warningFillColor: .systemOrange,
                 criticalFillColor: .systemRed,
@@ -332,6 +347,7 @@ struct StatusMenuPalette {
                 dividerColor: NSColor(red: 0.26, green: 0.29, blue: 0.34, alpha: 1.0),
                 renderedDividerColor: NSColor(red: 0.20, green: 0.22, blue: 0.25, alpha: 1.0),
                 progressTrackColor: NSColor(red: 0.26, green: 0.29, blue: 0.34, alpha: 1.0),
+                statusItemGlyphColor: NSColor(red: 0.86, green: 0.89, blue: 0.93, alpha: 1.0),
                 normalFillColor: NSColor(red: 0.86, green: 0.89, blue: 0.93, alpha: 1.0),
                 warningFillColor: .systemOrange,
                 criticalFillColor: .systemRed,
@@ -347,6 +363,7 @@ struct StatusMenuPalette {
                 dividerColor: .separatorColor,
                 renderedDividerColor: liveDividerColor(for: colorScheme),
                 progressTrackColor: .quaternaryLabelColor,
+                statusItemGlyphColor: .labelColor,
                 normalFillColor: .labelColor,
                 warningFillColor: .systemOrange,
                 criticalFillColor: .systemRed,

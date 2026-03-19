@@ -36,6 +36,11 @@ final class ScreenshotScenarioTests: XCTestCase {
         XCTAssertEqual(client.loadSnapshotCallCount, 0)
         XCTAssertEqual(store.state, .ready)
         XCTAssertEqual(store.cards.first?.usageText, "19% used · 81% remaining")
+        XCTAssertEqual(store.statusBarText, "5h: Open")
+        XCTAssertEqual(
+            store.statusItemPresentation,
+            .bar(.init(remainingPercent: 81, progressState: .normal))
+        )
         XCTAssertEqual(store.lastUpdated, ScreenshotScenario.normal.lastUpdated)
     }
 
@@ -53,7 +58,11 @@ final class ScreenshotScenarioTests: XCTestCase {
         XCTAssertEqual(store.state, .ready)
         XCTAssertEqual(store.cards.first?.compactLabel, "Weekly")
         XCTAssertEqual(store.cards.first?.title, "Weekly")
-        XCTAssertEqual(store.statusBarText, "1% Weekly")
+        XCTAssertEqual(store.statusBarText, "Week: Tight")
+        XCTAssertEqual(
+            store.statusItemPresentation,
+            .bar(.init(remainingPercent: 1, progressState: .critical))
+        )
         XCTAssertEqual(store.lastUpdated, ScreenshotScenario.multiweek.lastUpdated)
     }
 
@@ -90,7 +99,11 @@ final class ScreenshotScenarioTests: XCTestCase {
         XCTAssertEqual(client.loadSnapshotCallCount, 0)
         XCTAssertEqual(store.state, .ready)
         XCTAssertEqual(store.cardSections.map(\.title), [nil, "GPT-5.3-Codex-Spark limit"])
-        XCTAssertEqual(store.statusBarText, "50% Weekly")
+        XCTAssertEqual(store.statusBarText, "Week: Open")
+        XCTAssertEqual(
+            store.statusItemPresentation,
+            .bar(.init(remainingPercent: 50, progressState: .normal))
+        )
         XCTAssertEqual(store.lastUpdated, ScreenshotScenario.spark.lastUpdated)
     }
 
