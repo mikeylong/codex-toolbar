@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Codex Toolbar for macOS</title>
+    <meta
+      name="description"
+      content="Codex Toolbar is a minimal macOS menu bar app that shows your Codex rate-limit remaining values at a glance."
+    >
+    <meta name="color-scheme" content="light dark">
+    <meta property="og:title" content="Codex Toolbar for macOS">
+    <meta
+      property="og:description"
+      content="A minimal macOS menu bar app that keeps your Codex rate limits visible in the menu bar."
+    >
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://codextoolbar.com">
+    <meta property="og:image" content="https://codextoolbar.com/assets/codex-status-og.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://codextoolbar.com/assets/codex-status-og.png">
+    <link rel="canonical" href="https://codextoolbar.com">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <p class="site-name">Codex Toolbar</p>
+        <nav aria-label="Primary">
+          <ul class="nav-list">
+            <li><a href="#features">Features</a></li>
+            <li><a href="#install">Install</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="wrap hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">macOS menu bar utility</p>
+            <h1>Keep Codex rate limits visible.</h1>
+            <p class="lede">
+              Codex Toolbar puts your remaining Codex usage in the menu bar, with a detailed
+              popover, automatic refresh, and a direct jump into the Codex desktop app.
+            </p>
+            <div class="action-row" aria-label="Primary actions">
+              <a class="action-link primary-action" href="https://github.com/mikeylong/codex-toolbar/releases/latest">
+                Download DMG
+              </a>
+              <a class="action-link" href="#install">View install options</a>
+            </div>
+            <p class="meta">
+              Requires macOS 14 or later, Codex and the Codex CLI installed locally, and an
+              active Codex sign-in.
+            </p>
+          </div>
+          <figure class="hero-media">
+            <picture>
+              <source
+                srcset="/assets/codextoolbar-tahoe-dark.png"
+                media="(prefers-color-scheme: dark)"
+              >
+              <img
+                src="/assets/codextoolbar-tahoe-light.png"
+                alt="Codex Toolbar showing rate-limit status in the macOS menu bar and popover."
+                width="815"
+                height="741"
+              >
+            </picture>
+          </figure>
+        </div>
+      </section>
+
+      <section id="features" class="section">
+        <div class="wrap">
+          <h2>Features</h2>
+          <ul class="feature-list">
+            <li>See your remaining Codex quota without keeping the main app open.</li>
+            <li>Check reset timing and detailed usage in a quick menu bar popover.</li>
+            <li>Launch at login so your quota status is always available.</li>
+            <li>Optionally show additional categories, including Codex Spark.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="install" class="section">
+        <div class="wrap install-grid">
+          <div>
+            <h2>Install</h2>
+            <p>Download the DMG for the standard install flow, or build from source if you want a repo-backed install.</p>
+          </div>
+          <div>
+            <h3>DMG</h3>
+            <p>Download the latest release, open the disk image, and drag the app into Applications.</p>
+            <a
+              class="action-link direct-download-link"
+              href="https://github.com/mikeylong/codex-toolbar/releases/download/v0.1.6/CodexToolbar-0.1.6.dmg"
+            >
+              <span class="download-link-icon" aria-hidden="true">↓</span>
+              <span>Download DMG</span>
+            </a>
+            <p class="release-link-row">
+              <a
+                class="release-link"
+                href="https://github.com/mikeylong/codex-toolbar/releases/tag/v0.1.6"
+              >
+                v0.1.6 (Latest)
+              </a>
+            </p>
+          </div>
+          <div>
+            <h3>Source install</h3>
+            <p>Clone the repository and run the installer script.</p>
+            <pre class="code-block"><code>git clone https://github.com/mikeylong/codex-toolbar.git
+cd codex-toolbar
+./scripts/install_app.sh</code></pre>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap footer-inner">
+        <p>&copy; 2026 Codex Toolbar</p>
+        <p>
+          <a href="https://github.com/mikeylong/codex-toolbar">
+            github.com/mikeylong/codex-toolbar
+          </a>
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

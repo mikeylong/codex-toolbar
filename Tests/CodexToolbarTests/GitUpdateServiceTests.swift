@@ -60,7 +60,7 @@ final class GitUpdateServiceTests: XCTestCase {
             configuration: makeConfiguration(repositoryURL: repositoryURL)
         )
 
-        XCTAssertEqual(state, .updateAvailable("v0.1.4"))
+        XCTAssertEqual(state, .updateAvailable("v0.1.4", .installFromGitCheckout))
     }
 
     func testCheckForUpdatesIgnoresMalformedAndLightweightTags() async throws {
@@ -84,7 +84,47 @@ final class GitUpdateServiceTests: XCTestCase {
             configuration: makeConfiguration(repositoryURL: repositoryURL)
         )
 
-        XCTAssertEqual(state, .updateAvailable("v0.1.4"))
+        XCTAssertEqual(state, .updateAvailable("v0.1.4", .installFromGitCheckout))
+    }
+
+    func testCheckForUpdatesFallsBackToGitHubReleasesWhenGitMetadataIsUnavailable() async throws {
+        let tooling = RecordingGitUpdateTooling()
+        tooling.latestReleaseTag = "v0.1.4"
+
+        let state = await GitUpdateService(tooling: tooling).checkForUpdates(
+            currentVersion: "0.1.3",
+            configuration: nil
+        )
+
+        XCTAssertEqual(
+            state,
+            .updateAvailable(
+                "v0.1.4",
+                .downloadRelease(URL(string: "https://github.com/mikeylong/codex-toolbar/releases/latest")!)
+            )
+        )
+    }
+
+    func testCheckForUpdatesFallsBackToGitHubReleasesWhenSavedRepositoryIsUnavailable() async throws {
+        let tooling = RecordingGitUpdateTooling()
+        tooling.latestReleaseTag = "v0.1.4"
+
+        let state = await GitUpdateService(tooling: tooling).checkForUpdates(
+            currentVersion: "0.1.3",
+            configuration: GitUpdateRepositoryConfiguration(
+                repositoryRoot: "/tmp/missing-codex-toolbar-repo",
+                remoteName: "origin",
+                branchName: "main"
+            )
+        )
+
+        XCTAssertEqual(
+            state,
+            .updateAvailable(
+                "v0.1.4",
+                .downloadRelease(URL(string: "https://github.com/mikeylong/codex-toolbar/releases/latest")!)
+            )
+        )
     }
 
     func testInstallUpdateRejectsDirtyWorktree() async throws {
@@ -167,6 +207,7 @@ final class GitUpdateServiceTests: XCTestCase {
 private final class RecordingGitUpdateTooling: @unchecked Sendable, GitUpdateTooling {
     private let queue = DispatchQueue(label: "GitUpdateServiceTests.RecordingGitUpdateTooling")
     private var results: [String: GitCommandResult] = [:]
+    var latestReleaseTag: String?
     private(set) var launchedConfiguration: GitUpdateRepositoryConfiguration?
 
     func setResult(_ result: GitCommandResult, for arguments: [String]) {
@@ -189,6 +230,13 @@ private final class RecordingGitUpdateTooling: @unchecked Sendable, GitUpdateToo
         queue.sync {
             launchedConfiguration = configuration
         }
+    }
+
+    func fetchLatestReleaseTag(
+        repositorySlug: String,
+        timeoutNanoseconds: UInt64
+    ) async throws -> String? {
+        latestReleaseTag
     }
 
     private func key(for arguments: [String]) -> String {

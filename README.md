@@ -14,10 +14,20 @@ A small macOS menu bar app that shows your Codex rate-limit remaining values.
 ## Requirements
 
 - macOS 14+
-- Xcode Command Line Tools / Swift toolchain
+- Codex CLI installed locally
 - Codex installed and signed in on the same Mac
 
 ## Install
+
+### Download DMG
+
+[Download the latest DMG from GitHub Releases](https://github.com/mikeylong/codex-toolbar/releases/latest)
+
+Open the DMG, drag `CodexToolbar.app` into `Applications`, and launch it from there.
+
+### Build from source
+
+Source builds require Xcode Command Line Tools or a full Swift toolchain.
 
 ```bash
 git clone https://github.com/mikeylong/codex-toolbar.git
@@ -61,11 +71,13 @@ That quits `CodexToolbar` if it is running, removes its launch-at-login registra
 ```bash
 swift test
 swift run CodexToolbar
+./scripts/build_dmg.sh
 ./scripts/generate_screenshots.sh
 ./scripts/smoke_test_install.sh
 ```
 
 GitHub Actions runs `swift test` plus the installed-app smoke test on macOS for pull requests and pushes to `main`.
+Tagged releases also build and upload a signed DMG to GitHub Releases.
 
 Release rule:
 - Ship annotated git tags that match `Resources/Info.plist` `CFBundleShortVersionString`, for example `v0.1.6`.

@@ -23,23 +23,37 @@ struct GitUpdateRepositoryConfiguration: Equatable, Sendable {
     }
 }
 
+enum GitUpdateAction: Equatable, Sendable {
+    case installFromGitCheckout
+    case downloadRelease(URL)
+}
+
 enum GitUpdateState: Equatable, Sendable {
     case checking
     case upToDate
-    case updateAvailable(String)
+    case updateAvailable(String, GitUpdateAction)
     case unsupported(String)
 
     var latestTag: String? {
-        guard case let .updateAvailable(tag) = self else {
+        guard case let .updateAvailable(tag, _) = self else {
             return nil
         }
 
         return tag
     }
+
+    var action: GitUpdateAction? {
+        guard case let .updateAvailable(_, action) = self else {
+            return nil
+        }
+
+        return action
+    }
 }
 
 enum GitUpdateInstallResult: Equatable, Sendable {
     case started
+    case openReleasePage(URL)
     case failed(String)
 }
 
@@ -50,6 +64,10 @@ protocol GitUpdateTooling: Sendable {
         timeoutNanoseconds: UInt64
     ) async throws -> GitCommandResult
     func launchDetachedUpdate(configuration: GitUpdateRepositoryConfiguration) throws
+    func fetchLatestReleaseTag(
+        repositorySlug: String,
+        timeoutNanoseconds: UInt64
+    ) async throws -> String?
 }
 
 struct GitCommandResult: Equatable, Sendable {
@@ -58,28 +76,45 @@ struct GitCommandResult: Equatable, Sendable {
     let stderr: String
 }
 
+struct ReleaseDownloadConfiguration: Equatable, Sendable {
+    let repositorySlug: String
+    let releasesURL: URL
+    let latestReleaseAPIURL: URL
+
+    static let codexToolbar = ReleaseDownloadConfiguration(
+        repositorySlug: "mikeylong/codex-toolbar",
+        releasesURL: URL(string: "https://github.com/mikeylong/codex-toolbar/releases/latest")!,
+        latestReleaseAPIURL: URL(string: "https://api.github.com/repos/mikeylong/codex-toolbar/releases/latest")!
+    )
+}
+
 struct GitUpdateService: Sendable {
     private let tooling: any GitUpdateTooling
+    private let releaseDownloadConfiguration: ReleaseDownloadConfiguration
 
-    init(tooling: any GitUpdateTooling = LiveGitUpdateTooling()) {
+    init(
+        tooling: any GitUpdateTooling = LiveGitUpdateTooling(),
+        releaseDownloadConfiguration: ReleaseDownloadConfiguration = .codexToolbar
+    ) {
         self.tooling = tooling
+        self.releaseDownloadConfiguration = releaseDownloadConfiguration
     }
 
     func checkForUpdates(
         currentVersion: String,
         configuration: GitUpdateRepositoryConfiguration?
     ) async -> GitUpdateState {
+        guard let installedVersion = GitReleaseVersion(versionString: currentVersion) else {
+            return .unsupported("Installed app version is invalid.")
+        }
+
         guard let configuration else {
-            return .unsupported("Git checkout metadata is unavailable.")
+            return await checkForReleaseDownloadUpdates(installedVersion: installedVersion)
         }
 
         let repositoryURL = configuration.repositoryURL
         guard Self.isDirectory(at: repositoryURL) else {
-            return .unsupported("Saved git checkout is unavailable.")
-        }
-
-        guard let installedVersion = GitReleaseVersion(versionString: currentVersion) else {
-            return .unsupported("Installed app version is invalid.")
+            return await checkForReleaseDownloadUpdates(installedVersion: installedVersion)
         }
 
         do {
@@ -109,7 +144,7 @@ struct GitUpdateService: Sendable {
             }
 
             if latestVersion > installedVersion {
-                return .updateAvailable(latestVersion.tagName)
+                return .updateAvailable(latestVersion.tagName, .installFromGitCheckout)
             }
 
             return .upToDate
@@ -152,6 +187,28 @@ struct GitUpdateService: Sendable {
             return .started
         } catch {
             return .failed(error.localizedDescription)
+        }
+    }
+
+    private func checkForReleaseDownloadUpdates(installedVersion: GitReleaseVersion) async -> GitUpdateState {
+        do {
+            guard
+                let latestTag = try await tooling.fetchLatestReleaseTag(
+                    repositorySlug: releaseDownloadConfiguration.repositorySlug,
+                    timeoutNanoseconds: 15_000_000_000
+                ),
+                let latestVersion = GitReleaseVersion(tagName: latestTag)
+            else {
+                return .unsupported("No GitHub releases found.")
+            }
+
+            if latestVersion > installedVersion {
+                return .updateAvailable(latestVersion.tagName, .downloadRelease(releaseDownloadConfiguration.releasesURL))
+            }
+
+            return .upToDate
+        } catch {
+            return .unsupported(error.localizedDescription)
         }
     }
 
@@ -252,11 +309,16 @@ final class GitUpdateController {
     }
 
     func installUpdate() async -> GitUpdateInstallResult {
-        guard case .updateAvailable = menuState else {
+        guard let action = menuState.action else {
             return .failed("No update is currently available.")
         }
 
-        return await service.installUpdate(configuration: preferences.gitUpdateRepositoryConfiguration())
+        switch action {
+        case .installFromGitCheckout:
+            return await service.installUpdate(configuration: preferences.gitUpdateRepositoryConfiguration())
+        case let .downloadRelease(url):
+            return .openReleasePage(url)
+        }
     }
 
     var menuState: GitUpdateState {
@@ -423,6 +485,32 @@ struct LiveGitUpdateTooling: GitUpdateTooling {
         try process.run()
     }
 
+    func fetchLatestReleaseTag(
+        repositorySlug: String,
+        timeoutNanoseconds: UInt64
+    ) async throws -> String? {
+        let configuration = ReleaseDownloadConfiguration(
+            repositorySlug: repositorySlug,
+            releasesURL: URL(string: "https://github.com/\(repositorySlug)/releases/latest")!,
+            latestReleaseAPIURL: URL(string: "https://api.github.com/repos/\(repositorySlug)/releases/latest")!
+        )
+        var request = URLRequest(url: configuration.latestReleaseAPIURL)
+        request.timeoutInterval = TimeInterval(timeoutNanoseconds) / 1_000_000_000
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("CodexToolbarUpdater", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw GitUpdateToolingError.invalidHTTPResponse
+        }
+
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw GitUpdateToolingError.httpFailure(httpResponse.statusCode)
+        }
+
+        return try JSONDecoder().decode(LatestGitHubReleaseResponse.self, from: data).tagName.nonEmpty
+    }
+
     private func runProcess(
         executableURL: URL,
         arguments: [String],
@@ -478,12 +566,26 @@ struct LiveGitUpdateTooling: GitUpdateTooling {
 
 private enum GitUpdateToolingError: LocalizedError {
     case timedOut
+    case invalidHTTPResponse
+    case httpFailure(Int)
 
     var errorDescription: String? {
         switch self {
         case .timedOut:
             return "Git update command timed out."
+        case .invalidHTTPResponse:
+            return "Release check returned an invalid response."
+        case let .httpFailure(statusCode):
+            return "Release check failed with HTTP \(statusCode)."
         }
+    }
+}
+
+private struct LatestGitHubReleaseResponse: Decodable {
+    let tagName: String
+
+    private enum CodingKeys: String, CodingKey {
+        case tagName = "tag_name"
     }
 }
 

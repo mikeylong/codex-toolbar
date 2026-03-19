@@ -93,7 +93,7 @@ final class AppDelegateTests: XCTestCase {
         let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
         let gitUpdateController = makeGitUpdateController(
             preferences: preferences,
-            state: .updateAvailable("v0.1.4")
+            state: .updateAvailable("v0.1.4", .installFromGitCheckout)
         )
         let delegate = makeDelegate(
             store: makeNormalStore(),
@@ -111,6 +111,28 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertTrue(menu.items[5].isEnabled)
         XCTAssertEqual(menu.items[6].title, "Version \(AppVersion.current)")
         XCTAssertEqual(menu.items[7].title, "Quit")
+    }
+
+    func testContextMenuShowsDownloadUpdateForReleaseBasedInstall() {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        let gitUpdateController = makeGitUpdateController(
+            preferences: preferences,
+            state: .updateAvailable(
+                "v0.1.4",
+                .downloadRelease(URL(string: "https://github.com/mikeylong/codex-toolbar/releases/latest")!)
+            )
+        )
+        let delegate = makeDelegate(
+            store: makeNormalStore(),
+            codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: nil),
+            preferences: preferences,
+            gitUpdateController: gitUpdateController
+        )
+
+        let menu = delegate.makeContextMenu()
+
+        XCTAssertEqual(menu.items[4].title, "Update available: v0.1.4")
+        XCTAssertEqual(menu.items[5].title, "Download update")
     }
 
     func testContextMenuSupplementalFamilyToggleReflectsEnabledPreference() {
@@ -274,6 +296,22 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertEqual(runtime.notifications.count, 1)
         XCTAssertEqual(runtime.notifications[0].title, "CodexToolbar update failed")
         XCTAssertEqual(runtime.notifications[0].body, "Refusing to update from a dirty git worktree.")
+    }
+
+    func testHandleInstallUpdateResultOpensReleasePageWithoutTerminating() throws {
+        let runtime = FakeAppRuntimeController()
+        let delegate = makeDelegate(
+            installedApplicationURL: nil,
+            preferences: ToolbarPreferences(defaults: Self.makeDefaults()),
+            appRuntime: runtime
+        )
+        let releaseURL = try XCTUnwrap(URL(string: "https://github.com/mikeylong/codex-toolbar/releases/latest"))
+
+        delegate.handleInstallUpdateResult(.openReleasePage(releaseURL))
+
+        XCTAssertEqual(runtime.terminateCallCount, 0)
+        XCTAssertEqual(runtime.openedURLs, [releaseURL])
+        XCTAssertEqual(runtime.notifications.count, 0)
     }
 
     private func makeDelegate(
@@ -444,6 +482,13 @@ private struct FakeGitUpdateTooling: GitUpdateTooling {
     }
 
     func launchDetachedUpdate(configuration: GitUpdateRepositoryConfiguration) throws {}
+
+    func fetchLatestReleaseTag(
+        repositorySlug: String,
+        timeoutNanoseconds: UInt64
+    ) async throws -> String? {
+        nil
+    }
 }
 
 @MainActor
@@ -455,6 +500,7 @@ private final class FakeAppRuntimeController: AppRuntimeControlling {
 
     private(set) var terminateCallCount = 0
     private(set) var notifications: [Notification] = []
+    private(set) var openedURLs: [URL] = []
 
     func terminate() {
         terminateCallCount += 1
@@ -462,5 +508,9 @@ private final class FakeAppRuntimeController: AppRuntimeControlling {
 
     func postNotification(title: String, body: String) {
         notifications.append(Notification(title: title, body: body))
+    }
+
+    func openURL(_ url: URL) throws {
+        openedURLs.append(url)
     }
 }

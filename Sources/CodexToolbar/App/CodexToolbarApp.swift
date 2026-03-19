@@ -7,6 +7,7 @@ import SwiftUI
 protocol AppRuntimeControlling {
     func terminate()
     func postNotification(title: String, body: String)
+    func openURL(_ url: URL) throws
 }
 
 @MainActor
@@ -23,6 +24,23 @@ private struct LiveAppRuntimeController: AppRuntimeControlling {
             NotificationAppleScriptBuilder.script(title: title, body: body)
         ]
         try? process.run()
+    }
+
+    func openURL(_ url: URL) throws {
+        guard NSWorkspace.shared.open(url) else {
+            throw AppRuntimeError.openURLFailed(url)
+        }
+    }
+}
+
+private enum AppRuntimeError: LocalizedError {
+    case openURLFailed(URL)
+
+    var errorDescription: String? {
+        switch self {
+        case let .openURLFailed(url):
+            return "Unable to open \(url.absoluteString)."
+        }
     }
 }
 
@@ -314,7 +332,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             availableItem.isEnabled = false
             menu.addItem(availableItem)
 
-            let installUpdateItem = NSMenuItem(title: "Install update", action: #selector(installUpdate), keyEquivalent: "")
+            let actionTitle: String
+            switch gitUpdateController.menuState.action {
+            case .installFromGitCheckout:
+                actionTitle = "Install update"
+            case .downloadRelease:
+                actionTitle = "Download update"
+            case nil:
+                actionTitle = "Install update"
+            }
+
+            let installUpdateItem = NSMenuItem(title: actionTitle, action: #selector(installUpdate), keyEquivalent: "")
             installUpdateItem.target = self
             menu.addItem(installUpdateItem)
         }
@@ -366,6 +394,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .started:
             popover?.performClose(nil)
             appRuntime.terminate()
+        case let .openReleasePage(url):
+            do {
+                try appRuntime.openURL(url)
+                popover?.performClose(nil)
+            } catch {
+                appRuntime.postNotification(
+                    title: "CodexToolbar update failed",
+                    body: error.localizedDescription
+                )
+            }
         case let .failed(message):
             appRuntime.postNotification(title: "CodexToolbar update failed", body: message)
         }

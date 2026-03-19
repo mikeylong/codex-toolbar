@@ -1,0 +1,38 @@
+{
+  "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.codextoolbar.com"
+        }
+      ],
+      "destination": "https://codextoolbar.com/:path*",
+      "permanent": true
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/site/index.html"
+    },
+    {
+      "source": "/styles.css",
+      "destination": "/site/styles.css"
+    },
+    {
+      "source": "/hero-test",
+      "destination": "/site/hero-test.html"
+    },
+    {
+      "source": "/hero-test.css",
+      "destination": "/site/hero-test.css"
+    },
+    {
+      "source": "/assets/:path*",
+      "destination": "/site/assets/:path*"
+    }
+  ]
+}
