@@ -533,7 +533,9 @@ final class RateLimitStoreTests: XCTestCase {
         )
 
         await store.start()
-        try? await Task.sleep(nanoseconds: 140_000_000)
+        await waitUntil {
+            client.loadSnapshotCallCount >= 2
+        }
 
         XCTAssertGreaterThanOrEqual(client.connectCallCount, 1)
         XCTAssertGreaterThanOrEqual(client.loadSnapshotCallCount, 2)
