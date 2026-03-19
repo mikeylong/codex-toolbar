@@ -7,6 +7,26 @@ SOURCE_APP="$ROOT_DIR/dist/$APP_NAME.app"
 TARGET_DIR="${HOME}/Applications"
 TARGET_APP="$TARGET_DIR/$APP_NAME.app"
 APP_EXECUTABLE="$TARGET_APP/Contents/MacOS/$APP_NAME"
+STAGED_APP="$TARGET_DIR/.${APP_NAME}.stage.$$.app"
+BACKUP_APP="$TARGET_DIR/.${APP_NAME}.backup.$$.app"
+ROLLBACK_NEEDED=0
+
+cleanup_install_artifacts() {
+  local exit_code="$1"
+  trap - EXIT
+
+  if [[ "$exit_code" -ne 0 && "$ROLLBACK_NEEDED" -eq 1 && -d "$BACKUP_APP" ]]; then
+    rm -rf "$TARGET_APP"
+    mv "$BACKUP_APP" "$TARGET_APP" || true
+  fi
+
+  rm -rf "$STAGED_APP"
+  rm -rf "$BACKUP_APP"
+
+  exit "$exit_code"
+}
+
+trap 'cleanup_install_artifacts $?' EXIT
 
 plist_value() {
   local plist_path="$1"
@@ -34,9 +54,10 @@ persist_git_update_metadata() {
   defaults write "$bundle_identifier" "gitUpdate.branchName" -string "$branch_name"
 }
 
-verify_installed_version_matches_source() {
+verify_app_version_matches_source() {
+  local app_bundle_path="$1"
   local source_plist="$ROOT_DIR/Resources/Info.plist"
-  local installed_plist="$TARGET_APP/Contents/Info.plist"
+  local installed_plist="$app_bundle_path/Contents/Info.plist"
   local source_short_version installed_short_version
   local source_bundle_version installed_bundle_version
 
@@ -61,9 +82,17 @@ if pgrep -f "$APP_EXECUTABLE" >/dev/null 2>&1; then
 fi
 
 mkdir -p "$TARGET_DIR"
-rm -rf "$TARGET_APP"
-cp -R "$SOURCE_APP" "$TARGET_APP"
-verify_installed_version_matches_source
+rm -rf "$STAGED_APP" "$BACKUP_APP"
+cp -R "$SOURCE_APP" "$STAGED_APP"
+verify_app_version_matches_source "$STAGED_APP"
+
+if [[ -d "$TARGET_APP" ]]; then
+  mv "$TARGET_APP" "$BACKUP_APP"
+  ROLLBACK_NEEDED=1
+fi
+
+mv "$STAGED_APP" "$TARGET_APP"
+verify_app_version_matches_source "$TARGET_APP"
 persist_git_update_metadata
 
 if command -v xattr >/dev/null 2>&1; then
@@ -74,3 +103,4 @@ echo "Installed app bundle:"
 echo "$TARGET_APP"
 
 open "$TARGET_APP"
+ROLLBACK_NEEDED=0

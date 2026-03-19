@@ -246,16 +246,48 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertEqual(button.accessibilityLabel(), "Codex toolbar. Codex CLI not found.")
     }
 
+    func testHandleInstallUpdateResultTerminatesImmediatelyAfterDetachedUpdaterStarts() {
+        let runtime = FakeAppRuntimeController()
+        let delegate = makeDelegate(
+            installedApplicationURL: nil,
+            preferences: ToolbarPreferences(defaults: Self.makeDefaults()),
+            appRuntime: runtime
+        )
+
+        delegate.handleInstallUpdateResult(.started)
+
+        XCTAssertEqual(runtime.terminateCallCount, 1)
+        XCTAssertEqual(runtime.notifications.count, 0)
+    }
+
+    func testHandleInstallUpdateResultNotifiesOnPreflightFailureWithoutTerminating() {
+        let runtime = FakeAppRuntimeController()
+        let delegate = makeDelegate(
+            installedApplicationURL: nil,
+            preferences: ToolbarPreferences(defaults: Self.makeDefaults()),
+            appRuntime: runtime
+        )
+
+        delegate.handleInstallUpdateResult(.failed("Refusing to update from a dirty git worktree."))
+
+        XCTAssertEqual(runtime.terminateCallCount, 0)
+        XCTAssertEqual(runtime.notifications.count, 1)
+        XCTAssertEqual(runtime.notifications[0].title, "CodexToolbar update failed")
+        XCTAssertEqual(runtime.notifications[0].body, "Refusing to update from a dirty git worktree.")
+    }
+
     private func makeDelegate(
         installedApplicationURL: URL?,
         preferences: ToolbarPreferences,
-        screenshotConfiguration: ScreenshotLaunchConfiguration? = nil
+        screenshotConfiguration: ScreenshotLaunchConfiguration? = nil,
+        appRuntime: any AppRuntimeControlling = FakeAppRuntimeController()
     ) -> AppDelegate {
         makeDelegate(
             store: makeNormalStore(),
             codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: installedApplicationURL),
             preferences: preferences,
-            screenshotConfiguration: screenshotConfiguration
+            screenshotConfiguration: screenshotConfiguration,
+            appRuntime: appRuntime
         )
     }
 
@@ -264,7 +296,8 @@ final class AppDelegateTests: XCTestCase {
         codexDesktopAppProvider: any CodexDesktopAppProviding,
         preferences: ToolbarPreferences,
         screenshotConfiguration: ScreenshotLaunchConfiguration? = nil,
-        gitUpdateController: GitUpdateController? = nil
+        gitUpdateController: GitUpdateController? = nil,
+        appRuntime: any AppRuntimeControlling = FakeAppRuntimeController()
     ) -> AppDelegate {
         AppDelegate(
             store: store,
@@ -274,7 +307,8 @@ final class AppDelegateTests: XCTestCase {
             preferences: preferences,
             maintenanceLaunchConfiguration: nil,
             screenshotConfiguration: screenshotConfiguration,
-            startupDiagnosticsConfiguration: nil
+            startupDiagnosticsConfiguration: nil,
+            appRuntime: appRuntime
         )
     }
 
@@ -410,4 +444,23 @@ private struct FakeGitUpdateTooling: GitUpdateTooling {
     }
 
     func launchDetachedUpdate(configuration: GitUpdateRepositoryConfiguration) throws {}
+}
+
+@MainActor
+private final class FakeAppRuntimeController: AppRuntimeControlling {
+    struct Notification: Equatable {
+        let title: String
+        let body: String
+    }
+
+    private(set) var terminateCallCount = 0
+    private(set) var notifications: [Notification] = []
+
+    func terminate() {
+        terminateCallCount += 1
+    }
+
+    func postNotification(title: String, body: String) {
+        notifications.append(Notification(title: title, body: body))
+    }
 }

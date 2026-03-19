@@ -1,6 +1,18 @@
 import Foundation
 import Observation
 
+enum NotificationAppleScriptBuilder {
+    static func script(title: String, body: String) -> String {
+        "display notification \"\(escape(body))\" with title \"\(escape(title))\""
+    }
+
+    private static func escape(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+    }
+}
+
 struct GitUpdateRepositoryConfiguration: Equatable, Sendable {
     let repositoryRoot: String
     let remoteName: String
@@ -320,7 +332,71 @@ private struct GitReleaseVersion: Comparable, Equatable, Sendable {
     }
 }
 
-private struct LiveGitUpdateTooling: GitUpdateTooling {
+struct GitUpdateDetachedCommandBuilder {
+    let logPath: String
+    let installedAppPath: String
+    let updateFailureTitle: String
+
+    init(
+        logPath: String = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("codextoolbar-update.log")
+            .path,
+        installedAppPath: String = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+            .appendingPathComponent("Applications/CodexToolbar.app")
+            .path,
+        updateFailureTitle: String = "CodexToolbar update failed"
+    ) {
+        self.logPath = logPath
+        self.installedAppPath = installedAppPath
+        self.updateFailureTitle = updateFailureTitle
+    }
+
+    func command(for configuration: GitUpdateRepositoryConfiguration) -> String {
+        """
+        set -euo pipefail
+        exec </dev/null >\(shellQuoted(logPath)) 2>&1
+        cd \(shellQuoted(configuration.repositoryRoot))
+        if [[ -n "$(git status --porcelain)" ]]; then
+          \(failureShellCommand(reason: "Refusing update from a dirty git worktree."))
+          exit 1
+        fi
+        if ! git pull --ff-only \(shellQuoted(configuration.remoteName)) \(shellQuoted(configuration.branchName)); then
+          \(failureShellCommand(reason: "Failed to fast-forward \(configuration.remoteName)/\(configuration.branchName)."))
+          exit 1
+        fi
+        if ! ./scripts/install_app.sh; then
+          \(failureShellCommand(reason: "Failed to install CodexToolbar update."))
+          exit 1
+        fi
+        """
+    }
+
+    private func failureShellCommand(reason: String) -> String {
+        """
+        if [[ -d \(shellQuoted(installedAppPath)) ]]; then
+          open \(shellQuoted(installedAppPath)) >/dev/null 2>&1 || true
+        fi
+        /usr/bin/osascript -e \(shellQuoted(
+            NotificationAppleScriptBuilder.script(
+                title: updateFailureTitle,
+                body: "\(reason) See log: \(logPath)"
+            )
+        )) >/dev/null 2>&1 || true
+        """
+    }
+
+    private func shellQuoted(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
+    }
+}
+
+struct LiveGitUpdateTooling: GitUpdateTooling {
+    private let commandBuilder: GitUpdateDetachedCommandBuilder
+
+    init(commandBuilder: GitUpdateDetachedCommandBuilder = GitUpdateDetachedCommandBuilder()) {
+        self.commandBuilder = commandBuilder
+    }
+
     func runGit(
         arguments: [String],
         repositoryURL: URL,
@@ -342,27 +418,9 @@ private struct LiveGitUpdateTooling: GitUpdateTooling {
             "nohup",
             "/bin/zsh",
             "-lc",
-            updateCommand(for: configuration)
+            commandBuilder.command(for: configuration)
         ]
         try process.run()
-    }
-
-    private func updateCommand(for configuration: GitUpdateRepositoryConfiguration) -> String {
-        let logPath = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent("codextoolbar-update.log")
-            .path
-
-        return """
-        set -euo pipefail
-        exec </dev/null >\(shellQuoted(logPath)) 2>&1
-        cd \(shellQuoted(configuration.repositoryRoot))
-        if [[ -n "$(git status --porcelain)" ]]; then
-          echo "Refusing update from a dirty git worktree." >&2
-          exit 1
-        fi
-        git pull --ff-only \(shellQuoted(configuration.remoteName)) \(shellQuoted(configuration.branchName))
-        ./scripts/install_app.sh
-        """
     }
 
     private func runProcess(
@@ -415,10 +473,6 @@ private struct LiveGitUpdateTooling: GitUpdateTooling {
             stdout: String(decoding: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
             stderr: String(decoding: stderrPipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         )
-    }
-
-    private func shellQuoted(_ value: String) -> String {
-        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 }
 

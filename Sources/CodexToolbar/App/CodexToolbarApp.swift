@@ -3,6 +3,29 @@ import Darwin
 import Observation
 import SwiftUI
 
+@MainActor
+protocol AppRuntimeControlling {
+    func terminate()
+    func postNotification(title: String, body: String)
+}
+
+@MainActor
+private struct LiveAppRuntimeController: AppRuntimeControlling {
+    func terminate() {
+        NSApplication.shared.terminate(nil)
+    }
+
+    func postNotification(title: String, body: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = [
+            "-e",
+            NotificationAppleScriptBuilder.script(title: title, body: body)
+        ]
+        try? process.run()
+    }
+}
+
 @main
 struct CodexToolbarApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -24,6 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let maintenanceLaunchConfiguration: MaintenanceLaunchConfiguration?
     private let screenshotConfiguration: ScreenshotLaunchConfiguration?
     private let startupDiagnosticsConfiguration: StartupDiagnosticsConfiguration?
+    private let appRuntime: any AppRuntimeControlling
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var startupDiagnosticsDidFinish = false
@@ -38,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         maintenanceLaunchConfiguration = MaintenanceLaunchConfiguration.current()
         screenshotConfiguration = ScreenshotLaunchConfiguration.current()
         startupDiagnosticsConfiguration = StartupDiagnosticsConfiguration.current()
+        appRuntime = LiveAppRuntimeController()
         super.init()
     }
 
@@ -49,7 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         preferences: ToolbarPreferences = .shared,
         maintenanceLaunchConfiguration: MaintenanceLaunchConfiguration?,
         screenshotConfiguration: ScreenshotLaunchConfiguration?,
-        startupDiagnosticsConfiguration: StartupDiagnosticsConfiguration?
+        startupDiagnosticsConfiguration: StartupDiagnosticsConfiguration?,
+        appRuntime: any AppRuntimeControlling = LiveAppRuntimeController()
     ) {
         self.store = store
         self.loginItemController = loginItemController
@@ -59,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.maintenanceLaunchConfiguration = maintenanceLaunchConfiguration
         self.screenshotConfiguration = screenshotConfiguration
         self.startupDiagnosticsConfiguration = startupDiagnosticsConfiguration
+        self.appRuntime = appRuntime
         super.init()
     }
 
@@ -330,17 +357,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
 
-            switch await gitUpdateController.installUpdate() {
-            case .started:
-                break
-            case let .failed(message):
-                fputs("Install update failed: \(message)\n", stderr)
-            }
+            handleInstallUpdateResult(await gitUpdateController.installUpdate())
+        }
+    }
+
+    func handleInstallUpdateResult(_ result: GitUpdateInstallResult) {
+        switch result {
+        case .started:
+            popover?.performClose(nil)
+            appRuntime.terminate()
+        case let .failed(message):
+            appRuntime.postNotification(title: "CodexToolbar update failed", body: message)
         }
     }
 
     @objc private func quitApp() {
-        NSApplication.shared.terminate(nil)
+        appRuntime.terminate()
     }
 
     private var shouldShowOpenCodexButton: Bool {

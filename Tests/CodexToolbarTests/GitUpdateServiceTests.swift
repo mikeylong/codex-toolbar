@@ -118,6 +118,27 @@ final class GitUpdateServiceTests: XCTestCase {
         XCTAssertEqual(tooling.launchedConfiguration, configuration)
     }
 
+    func testDetachedUpdateCommandTargetsConfiguredRepositoryAndRecoversOnFailure() {
+        let configuration = GitUpdateRepositoryConfiguration(
+            repositoryRoot: "/tmp/Codex Toolbar Repo",
+            remoteName: "origin",
+            branchName: "main"
+        )
+        let builder = GitUpdateDetachedCommandBuilder(
+            logPath: "/tmp/codextoolbar-update.log",
+            installedAppPath: "/Users/test/Applications/CodexToolbar.app"
+        )
+
+        let command = builder.command(for: configuration)
+
+        XCTAssertTrue(command.contains("cd '/tmp/Codex Toolbar Repo'"))
+        XCTAssertTrue(command.contains("git pull --ff-only 'origin' 'main'"))
+        XCTAssertTrue(command.contains("./scripts/install_app.sh"))
+        XCTAssertTrue(command.contains("open '/Users/test/Applications/CodexToolbar.app'"))
+        XCTAssertTrue(command.contains("CodexToolbar update failed"))
+        XCTAssertTrue(command.contains("See log: /tmp/codextoolbar-update.log"))
+    }
+
     private func makeConfiguration(repositoryURL: URL) -> GitUpdateRepositoryConfiguration {
         GitUpdateRepositoryConfiguration(
             repositoryRoot: repositoryURL.path,
