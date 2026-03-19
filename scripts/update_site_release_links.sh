@@ -8,7 +8,7 @@ fi
 
 TAG="$1"
 if [[ ! "$TAG" =~ '^v[0-9]+\.[0-9]+\.[0-9]+$' ]]; then
-  echo "Expected tag like v0.1.6, got: $TAG" >&2
+  echo "Expected tag like v0.1.7, got: $TAG" >&2
   exit 1
 fi
 

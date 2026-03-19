@@ -458,15 +458,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private static func statusItemImage() -> NSImage {
-        if let image = Bundle.module.image(forResource: "CodexStatusGlyph") {
-            image.isTemplate = true
+        if let image = Bundle.module.image(forResource: "CodexStatusGlyphWhite") {
+            image.isTemplate = false
             image.size = NSSize(width: 16, height: 16)
             return image
         }
 
         let fallback = NSImage(systemSymbolName: "greaterthan.circle", accessibilityDescription: "Codex")
             ?? NSImage(size: NSSize(width: 16, height: 16))
-        fallback.isTemplate = true
+        fallback.isTemplate = false
         fallback.size = NSSize(width: 16, height: 16)
         return fallback
     }
@@ -492,6 +492,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         trackColor: NSColor,
         fillColor: NSColor
     ) -> NSImage {
+        _ = glyphColor
         let glyphSize = NSSize(width: 16, height: 16)
         let gap: CGFloat = 4
         let barSize = NSSize(width: 44, height: 6)
@@ -528,14 +529,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private static func drawTintedGlyph(in rect: NSRect, color: NSColor) {
         let glyphImage = statusItemImage()
-        let tintedGlyph = NSImage(size: glyphImage.size)
-
-        tintedGlyph.lockFocus()
-        glyphImage.draw(in: NSRect(origin: .zero, size: glyphImage.size))
-        color.set()
-        NSRect(origin: .zero, size: glyphImage.size).fill(using: .sourceAtop)
-        tintedGlyph.unlockFocus()
-        tintedGlyph.draw(in: rect)
+        glyphImage.draw(in: rect)
     }
 
     private static func drawBar(
@@ -719,7 +713,7 @@ enum AppVersion {
             return version
         }
 
-        return "0.1.6"
+        return "0.1.7"
     }()
 
     private static func developmentVersionFromSourceInfoPlist() -> String? {

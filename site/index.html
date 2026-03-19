@@ -20,14 +20,53 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:image" content="https://codextoolbar.com/assets/codex-status-og.png">
     <link rel="canonical" href="https://codextoolbar.com">
+    <link
+      id="site-favicon"
+      rel="icon"
+      type="image/svg+xml"
+      href="/assets/codex-glyph-black.svg"
+    >
     <link rel="stylesheet" href="/styles.css">
+    <script>
+      (() => {
+        const lightFavicon = "/assets/codex-glyph-black.svg";
+        const darkFavicon = "/assets/codex-glyph-white.svg";
+        const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+        const updateFavicon = () => {
+          const favicon = document.getElementById("site-favicon");
+          if (!favicon) {
+            return;
+          }
+
+          favicon.href = mediaQuery.matches ? darkFavicon : lightFavicon;
+        };
+
+        updateFavicon();
+        mediaQuery.addEventListener("change", updateFavicon);
+      })();
+    </script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
 
     <header class="site-header">
       <div class="wrap header-inner">
-        <p class="site-name">Codex Toolbar</p>
+        <a class="site-brand" href="/" aria-label="Codex Toolbar home">
+          <picture class="site-brand-mark">
+            <source
+              srcset="/assets/codex-glyph-white.svg"
+              media="(prefers-color-scheme: dark)"
+            >
+            <img
+              src="/assets/codex-glyph-black.svg"
+              alt=""
+              width="32"
+              height="32"
+            >
+          </picture>
+          <span class="site-name">Codex Toolbar</span>
+        </a>
         <nav aria-label="Primary">
           <ul class="nav-list">
             <li><a href="#features">Features</a></li>
@@ -98,7 +137,7 @@
             <p>Download the latest release, open the disk image, and drag the app into Applications.</p>
             <a
               class="action-link direct-download-link"
-              href="https://github.com/mikeylong/codex-toolbar/releases/download/v0.1.6/CodexToolbar-0.1.6.dmg"
+              href="https://github.com/mikeylong/codex-toolbar/releases/download/v0.1.7/CodexToolbar-0.1.7.dmg"
             >
               <span class="download-link-icon" aria-hidden="true">↓</span>
               <span>Download DMG</span>
@@ -106,9 +145,9 @@
             <p class="release-link-row">
               <a
                 class="release-link"
-                href="https://github.com/mikeylong/codex-toolbar/releases/tag/v0.1.6"
+                href="https://github.com/mikeylong/codex-toolbar/releases/tag/v0.1.7"
               >
-                v0.1.6 (Latest)
+                v0.1.7 (Latest)
               </a>
             </p>
           </div>

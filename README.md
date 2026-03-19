@@ -80,7 +80,7 @@ GitHub Actions runs `swift test` plus the installed-app smoke test on macOS for 
 Tagged releases also build and upload a signed DMG to GitHub Releases.
 
 Release rule:
-- Ship annotated git tags that match `Resources/Info.plist` `CFBundleShortVersionString`, for example `v0.1.6`.
+- Ship annotated git tags that match `Resources/Info.plist` `CFBundleShortVersionString`, for example `v0.1.7`.
 
 ## Troubleshooting
 

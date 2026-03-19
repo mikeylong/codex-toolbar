@@ -22,8 +22,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --page-bg: #111111;
-    --surface: #111111;
+    --page-bg: #000000;
+    --surface: #000000;
     --surface-muted: #1d1d1d;
     --text: #f5f5f5;
     --muted: #c9c9c9;
@@ -62,16 +62,13 @@ img {
 }
 
 .hero-media img {
+  border: 0;
   border-radius: 24px;
 }
 
 a {
   color: var(--accent);
-  text-underline-offset: 0.18em;
-}
-
-a:hover {
-  text-decoration-thickness: 0.12em;
+  text-decoration: none;
 }
 
 a:focus-visible {
@@ -169,9 +166,33 @@ ul {
   padding: var(--space-2) 0;
 }
 
+.site-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.site-brand:hover {
+  text-decoration: none;
+}
+
+.site-brand-mark {
+  display: block;
+  flex-shrink: 0;
+}
+
+.site-brand-mark img {
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 0;
+}
+
 .site-name {
   font-size: 0.95rem;
   font-weight: 600;
+  line-height: 1;
 }
 
 .nav-list {
