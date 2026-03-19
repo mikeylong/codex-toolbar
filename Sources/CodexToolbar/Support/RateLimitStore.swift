@@ -171,6 +171,17 @@ final class RateLimitStore {
         }
     }
 
+    var statusItemTooltipText: String {
+        switch state {
+        case .idle, .connecting:
+            return preferredStatusBarCard.map(Self.statusItemTooltipText(for:)) ?? "Loading rate limits."
+        case .ready:
+            return preferredStatusBarCard.map(Self.statusItemTooltipText(for:)) ?? "Rate limit status unavailable."
+        case let .error(message):
+            return message
+        }
+    }
+
     private var preferredStatusBarCard: RateLimitCardViewData? {
         Self.preferredStatusBarCard(from: cards)
     }
@@ -586,6 +597,10 @@ final class RateLimitStore {
             windowDurationMins: card.windowDurationMins,
             remainingPercent: card.remainingPercent
         )
+    }
+
+    private static func statusItemTooltipText(for card: RateLimitCardViewData) -> String {
+        RateLimitFormatter.statusItemTooltipText(remainingPercent: card.remainingPercent)
     }
 
     private static func statusItemBarPresentation(for card: RateLimitCardViewData) -> StatusItemBarPresentation {

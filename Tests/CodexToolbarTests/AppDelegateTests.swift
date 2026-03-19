@@ -189,6 +189,63 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertNotEqual(try pixelData(for: warningImage, in: barRegion), try pixelData(for: criticalImage, in: barRegion))
     }
 
+    func testUpdateStatusItemButtonSetsReadyTooltipWithoutChangingAccessibilityLabel() throws {
+        let store = RateLimitStore(
+            client: FakeStatusItemRateLimitClient(),
+            initialState: .ready,
+            initialCards: [
+                RateLimitCardViewData(
+                    window: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 50, windowDurationMins: 10_080),
+                    familyId: "codex"
+                )
+            ],
+            initialStatusMessage: "Rate limits remaining",
+            liveUpdatesEnabled: false
+        )
+        let delegate = makeDelegate(
+            store: store,
+            codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: nil),
+            preferences: ToolbarPreferences(defaults: Self.makeDefaults())
+        )
+        let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        defer {
+            NSStatusBar.system.removeStatusItem(statusItem)
+        }
+        let button = try XCTUnwrap(statusItem.button)
+
+        delegate.updateStatusItemButton(button)
+
+        XCTAssertEqual(button.toolTip, "50% remaining")
+        XCTAssertEqual(button.title, "")
+        XCTAssertEqual(button.accessibilityLabel(), "Codex toolbar. Weekly limit status open. 50% remaining.")
+    }
+
+    func testUpdateStatusItemButtonSetsErrorTooltipForTextPresentation() throws {
+        let store = RateLimitStore(
+            client: FakeStatusItemRateLimitClient(),
+            initialState: .error("Codex CLI not found."),
+            initialCards: [],
+            initialStatusMessage: "Codex CLI not found.",
+            liveUpdatesEnabled: false
+        )
+        let delegate = makeDelegate(
+            store: store,
+            codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: nil),
+            preferences: ToolbarPreferences(defaults: Self.makeDefaults())
+        )
+        let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        defer {
+            NSStatusBar.system.removeStatusItem(statusItem)
+        }
+        let button = try XCTUnwrap(statusItem.button)
+
+        delegate.updateStatusItemButton(button)
+
+        XCTAssertEqual(button.toolTip, "Codex CLI not found.")
+        XCTAssertEqual(button.title, "!")
+        XCTAssertEqual(button.accessibilityLabel(), "Codex toolbar. Codex CLI not found.")
+    }
+
     private func makeDelegate(
         installedApplicationURL: URL?,
         preferences: ToolbarPreferences,
@@ -314,6 +371,33 @@ private struct FakeLoginItemService: LoginItemService {
 
     func register() throws {}
     func unregister() throws {}
+}
+
+private final class FakeStatusItemRateLimitClient: @unchecked Sendable, CodexRateLimitClient {
+    func events() -> AsyncStream<CodexAppServerEvent> {
+        AsyncStream { continuation in
+            continuation.finish()
+        }
+    }
+
+    func connect() async throws {}
+    func disconnect() async {}
+
+    func readAccount(refreshToken: Bool) async throws -> GetAccountResponse {
+        fatalError("Unused in AppDelegateTests")
+    }
+
+    func readRateLimits() async throws -> GetAccountRateLimitsResponse {
+        fatalError("Unused in AppDelegateTests")
+    }
+
+    func readLoginStatus() async throws -> CodexLoginStatus {
+        .loggedIn
+    }
+
+    func loadSnapshot(refreshToken: Bool) async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
+        fatalError("Unused in AppDelegateTests")
+    }
 }
 
 private struct FakeGitUpdateTooling: GitUpdateTooling {

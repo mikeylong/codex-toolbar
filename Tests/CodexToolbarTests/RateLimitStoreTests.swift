@@ -181,6 +181,7 @@ final class RateLimitStoreTests: XCTestCase {
         XCTAssertEqual(store.visibleCardSections(visibleSupplementalFamilyIDs: []).first?.cards.map(\.title), ["Weekly", "5h"])
         XCTAssertEqual(store.statusBarText, "Week: Open")
         XCTAssertEqual(store.statusBarAccessibilityText, "Weekly limit status open. 50% remaining.")
+        XCTAssertEqual(store.statusItemTooltipText, "50% remaining")
         XCTAssertEqual(
             store.statusItemPresentation,
             .bar(.init(remainingPercent: 50, progressState: .normal))
@@ -273,6 +274,7 @@ final class RateLimitStoreTests: XCTestCase {
             .bar(.init(remainingPercent: 18, progressState: .warning))
         )
         XCTAssertEqual(store.statusBarAccessibilityText, "5-hour limit status caution. 18% remaining.")
+        XCTAssertEqual(store.statusItemTooltipText, "18% remaining")
     }
 
     func testStatusBarTextFallsBackToLowestRemainingCodexDurationWhenWeeklyIsMissing() {
@@ -337,6 +339,7 @@ final class RateLimitStoreTests: XCTestCase {
         )
 
         XCTAssertEqual(store.statusItemPresentation, .text("--"))
+        XCTAssertEqual(store.statusItemTooltipText, "Loading rate limits.")
     }
 
     func testStatusItemPresentationKeepsBarModeWhileConnectingWithCachedCards() {
@@ -358,6 +361,7 @@ final class RateLimitStoreTests: XCTestCase {
             .bar(.init(remainingPercent: 18, progressState: .warning))
         )
         XCTAssertEqual(store.statusBarAccessibilityText, "5-hour limit status caution. 18% remaining.")
+        XCTAssertEqual(store.statusItemTooltipText, "18% remaining")
     }
 
     func testStatusItemPresentationUsesTextModeForErrors() {
@@ -370,6 +374,20 @@ final class RateLimitStoreTests: XCTestCase {
         )
 
         XCTAssertEqual(store.statusItemPresentation, .text("!"))
+        XCTAssertEqual(store.statusItemTooltipText, "Codex CLI not found.")
+    }
+
+    func testStatusItemTooltipUsesUnavailableFallbackWhenReadyWithoutCards() {
+        let store = RateLimitStore(
+            client: FakeCodexRateLimitClient(),
+            initialState: .ready,
+            initialCards: [],
+            initialStatusMessage: "Rate limits remaining",
+            liveUpdatesEnabled: false
+        )
+
+        XCTAssertEqual(store.statusItemPresentation, .text("--"))
+        XCTAssertEqual(store.statusItemTooltipText, "Rate limit status unavailable.")
     }
 
     func testStatusItemPresentationKeepsExhaustedStateForReadyCards() {

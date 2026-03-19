@@ -134,6 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             _ = store.statusItemPresentation
             _ = store.statusBarText
             _ = store.statusBarAccessibilityText
+            _ = store.statusItemTooltipText
             _ = store.state
             _ = store.statusMessage
             _ = store.cards.count
@@ -150,7 +151,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateStatusItem() {
         guard let button = statusItem?.button else { return }
+        updateStatusItemButton(button)
+    }
 
+    func updateStatusItemButton(_ button: NSStatusBarButton) {
         switch store.statusItemPresentation {
         case let .text(text):
             button.image = Self.statusItemImage()
@@ -171,10 +175,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.title = ""
         }
 
+        button.toolTip = store.statusItemTooltipText
         button.setAccessibilityLabel("Codex toolbar. \(store.statusBarAccessibilityText)")
         button.sizeToFit()
     }
-
     private func maybeReportStartupDiagnostics() {
         guard
             let startupDiagnosticsConfiguration,
@@ -645,7 +649,7 @@ enum AppVersion {
             return version
         }
 
-        return "0.1.5"
+        return "0.1.6"
     }()
 
     private static func developmentVersionFromSourceInfoPlist() -> String? {

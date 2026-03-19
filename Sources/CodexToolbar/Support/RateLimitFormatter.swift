@@ -50,6 +50,10 @@ enum RateLimitFormatter {
         return "\(accessibilityWindowDescription(for: windowDurationMins)) status \(stateLabel). \(remainingPercent)% remaining."
     }
 
+    static func statusItemTooltipText(remainingPercent: Int) -> String {
+        "\(remainingPercent)% remaining"
+    }
+
     static func compactWindowLabel(for minutes: Int?) -> String {
         guard let minutes else {
             return "Limit"

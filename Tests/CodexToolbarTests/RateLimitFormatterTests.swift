@@ -26,6 +26,13 @@ final class RateLimitFormatterTests: XCTestCase {
         )
     }
 
+    func testStatusItemTooltipTextUsesPercentOnly() {
+        XCTAssertEqual(
+            RateLimitFormatter.statusItemTooltipText(remainingPercent: 18),
+            "18% remaining"
+        )
+    }
+
     func testFiveHourWindowLabel() {
         XCTAssertEqual(RateLimitFormatter.compactWindowLabel(for: 300), "5h")
         XCTAssertEqual(RateLimitFormatter.windowTitle(for: 300), "5h")
