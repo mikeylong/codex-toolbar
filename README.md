@@ -68,7 +68,7 @@ swift run CodexToolbar
 GitHub Actions runs `swift test` plus the installed-app smoke test on macOS for pull requests and pushes to `main`.
 
 Release rule:
-- Ship annotated git tags that match `Resources/Info.plist` `CFBundleShortVersionString`, for example `v0.1.4`.
+- Ship annotated git tags that match `Resources/Info.plist` `CFBundleShortVersionString`, for example `v0.1.5`.
 
 ## Troubleshooting
 

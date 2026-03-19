@@ -645,7 +645,7 @@ enum AppVersion {
             return version
         }
 
-        return "0.1.4"
+        return "0.1.5"
     }()
 
     private static func developmentVersionFromSourceInfoPlist() -> String? {
