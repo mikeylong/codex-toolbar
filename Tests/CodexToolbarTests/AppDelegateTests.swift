@@ -89,6 +89,30 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertEqual(menu.items[5].title, "Quit")
     }
 
+    func testContextMenuShowsUpdateItemsAboveVersionWhenUpdateIsAvailable() {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        let gitUpdateController = makeGitUpdateController(
+            preferences: preferences,
+            state: .updateAvailable("v0.1.4")
+        )
+        let delegate = makeDelegate(
+            store: makeNormalStore(),
+            codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: nil),
+            preferences: preferences,
+            gitUpdateController: gitUpdateController
+        )
+
+        let menu = delegate.makeContextMenu()
+
+        XCTAssertEqual(menu.items.count, 8)
+        XCTAssertEqual(menu.items[4].title, "Update available: v0.1.4")
+        XCTAssertFalse(menu.items[4].isEnabled)
+        XCTAssertEqual(menu.items[5].title, "Install update")
+        XCTAssertTrue(menu.items[5].isEnabled)
+        XCTAssertEqual(menu.items[6].title, "Version \(AppVersion.current)")
+        XCTAssertEqual(menu.items[7].title, "Quit")
+    }
+
     func testContextMenuSupplementalFamilyToggleReflectsEnabledPreference() {
         let defaults = Self.makeDefaults()
         defaults.set(true, forKey: "visibleSupplementalFamily.codex_bengalfox")
@@ -182,17 +206,32 @@ final class AppDelegateTests: XCTestCase {
         store: RateLimitStore,
         codexDesktopAppProvider: any CodexDesktopAppProviding,
         preferences: ToolbarPreferences,
-        screenshotConfiguration: ScreenshotLaunchConfiguration? = nil
+        screenshotConfiguration: ScreenshotLaunchConfiguration? = nil,
+        gitUpdateController: GitUpdateController? = nil
     ) -> AppDelegate {
         AppDelegate(
             store: store,
             loginItemController: LoginItemController(service: FakeLoginItemService()),
+            gitUpdateController: gitUpdateController ?? makeGitUpdateController(preferences: preferences),
             codexDesktopAppProvider: codexDesktopAppProvider,
             preferences: preferences,
             maintenanceLaunchConfiguration: nil,
             screenshotConfiguration: screenshotConfiguration,
             startupDiagnosticsConfiguration: nil
         )
+    }
+
+    private func makeGitUpdateController(
+        preferences: ToolbarPreferences,
+        state: GitUpdateState = .upToDate
+    ) -> GitUpdateController {
+        let controller = GitUpdateController(
+            service: GitUpdateService(tooling: FakeGitUpdateTooling()),
+            preferences: preferences,
+            refreshDelayNanosecondsProvider: { 1_000_000_000 }
+        )
+        controller.state = state
+        return controller
     }
 
     private func makeSparkStore() -> RateLimitStore {
@@ -275,4 +314,16 @@ private struct FakeLoginItemService: LoginItemService {
 
     func register() throws {}
     func unregister() throws {}
+}
+
+private struct FakeGitUpdateTooling: GitUpdateTooling {
+    func runGit(
+        arguments: [String],
+        repositoryURL: URL,
+        timeoutNanoseconds: UInt64
+    ) async throws -> GitCommandResult {
+        GitCommandResult(exitStatus: 0, stdout: "", stderr: "")
+    }
+
+    func launchDetachedUpdate(configuration: GitUpdateRepositoryConfiguration) throws {}
 }

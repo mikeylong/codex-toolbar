@@ -6,6 +6,9 @@ final class ToolbarPreferences {
 
     private enum Keys {
         static let visibleSupplementalFamilyPrefix = "visibleSupplementalFamily."
+        static let gitUpdateRepositoryRoot = "gitUpdate.repositoryRoot"
+        static let gitUpdateRemoteName = "gitUpdate.remoteName"
+        static let gitUpdateBranchName = "gitUpdate.branchName"
     }
 
     private let defaults: UserDefaults
@@ -49,7 +52,42 @@ final class ToolbarPreferences {
         )
     }
 
+    func gitUpdateRepositoryConfiguration() -> GitUpdateRepositoryConfiguration? {
+        guard
+            let repositoryRoot = defaults.string(forKey: Keys.gitUpdateRepositoryRoot)?.nonEmpty,
+            let remoteName = defaults.string(forKey: Keys.gitUpdateRemoteName)?.nonEmpty,
+            let branchName = defaults.string(forKey: Keys.gitUpdateBranchName)?.nonEmpty
+        else {
+            return nil
+        }
+
+        return GitUpdateRepositoryConfiguration(
+            repositoryRoot: repositoryRoot,
+            remoteName: remoteName,
+            branchName: branchName
+        )
+    }
+
+    func setGitUpdateRepositoryConfiguration(_ configuration: GitUpdateRepositoryConfiguration?) {
+        guard let configuration else {
+            defaults.removeObject(forKey: Keys.gitUpdateRepositoryRoot)
+            defaults.removeObject(forKey: Keys.gitUpdateRemoteName)
+            defaults.removeObject(forKey: Keys.gitUpdateBranchName)
+            return
+        }
+
+        defaults.set(configuration.repositoryRoot, forKey: Keys.gitUpdateRepositoryRoot)
+        defaults.set(configuration.remoteName, forKey: Keys.gitUpdateRemoteName)
+        defaults.set(configuration.branchName, forKey: Keys.gitUpdateBranchName)
+    }
+
     private func visibilityKey(for limitId: String) -> String {
         Keys.visibleSupplementalFamilyPrefix + limitId
+    }
+}
+
+private extension String {
+    var nonEmpty: String? {
+        isEmpty ? nil : self
     }
 }

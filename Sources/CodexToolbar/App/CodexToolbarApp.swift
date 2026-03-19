@@ -18,6 +18,7 @@ struct CodexToolbarApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let store: RateLimitStore
     private let loginItemController: LoginItemController
+    private let gitUpdateController: GitUpdateController
     private let codexDesktopAppProvider: any CodexDesktopAppProviding
     private let preferences: ToolbarPreferences
     private let maintenanceLaunchConfiguration: MaintenanceLaunchConfiguration?
@@ -31,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     override init() {
         store = .shared
         loginItemController = .shared
+        gitUpdateController = .shared
         codexDesktopAppProvider = CodexDesktopAppController()
         preferences = .shared
         maintenanceLaunchConfiguration = MaintenanceLaunchConfiguration.current()
@@ -42,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     init(
         store: RateLimitStore,
         loginItemController: LoginItemController,
+        gitUpdateController: GitUpdateController,
         codexDesktopAppProvider: any CodexDesktopAppProviding,
         preferences: ToolbarPreferences = .shared,
         maintenanceLaunchConfiguration: MaintenanceLaunchConfiguration?,
@@ -50,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ) {
         self.store = store
         self.loginItemController = loginItemController
+        self.gitUpdateController = gitUpdateController
         self.codexDesktopAppProvider = codexDesktopAppProvider
         self.preferences = preferences
         self.maintenanceLaunchConfiguration = maintenanceLaunchConfiguration
@@ -73,6 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             await store.start()
         }
+        gitUpdateController.start()
         maybeReportStartupDiagnostics()
         scheduleScreenshotCaptureIfNeeded()
     }
@@ -273,6 +278,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
+        if let latestTag = gitUpdateController.menuState.latestTag {
+            let availableItem = NSMenuItem(title: "Update available: \(latestTag)", action: nil, keyEquivalent: "")
+            availableItem.isEnabled = false
+            menu.addItem(availableItem)
+
+            let installUpdateItem = NSMenuItem(title: "Install update", action: #selector(installUpdate), keyEquivalent: "")
+            installUpdateItem.target = self
+            menu.addItem(installUpdateItem)
+        }
+
         let versionItem = NSMenuItem(title: "Version \(AppVersion.current)", action: nil, keyEquivalent: "")
         versionItem.isEnabled = false
         menu.addItem(versionItem)
@@ -286,7 +301,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func refreshNow() {
         Task {
-            await store.refreshNow()
+            async let storeRefresh: Void = store.refreshNow()
+            async let gitUpdateRefresh: Void = gitUpdateController.refreshNow()
+            _ = await (storeRefresh, gitUpdateRefresh)
         }
     }
 
@@ -303,6 +320,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         preferences.toggleSupplementalFamilyVisibility(family)
+    }
+
+    @objc private func installUpdate() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            switch await gitUpdateController.installUpdate() {
+            case .started:
+                break
+            case let .failed(message):
+                fputs("Install update failed: \(message)\n", stderr)
+            }
+        }
     }
 
     @objc private func quitApp() {
@@ -611,8 +641,32 @@ enum AppVersion {
             return version
         }
 
-        return "0.1.1"
+        if let version = developmentVersionFromSourceInfoPlist() {
+            return version
+        }
+
+        return "0.1.4"
     }()
+
+    private static func developmentVersionFromSourceInfoPlist() -> String? {
+        let sourceFileURL = URL(fileURLWithPath: #filePath)
+        let repositoryRootURL = sourceFileURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let infoPlistURL = repositoryRootURL.appendingPathComponent("Resources/Info.plist")
+
+        guard
+            let plist = NSDictionary(contentsOf: infoPlistURL),
+            let version = plist["CFBundleShortVersionString"] as? String,
+            !version.isEmpty
+        else {
+            return nil
+        }
+
+        return version
+    }
 }
 
 private enum ScreenshotCaptureError: LocalizedError {

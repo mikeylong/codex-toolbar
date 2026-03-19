@@ -67,6 +67,9 @@ swift run CodexToolbar
 
 GitHub Actions runs `swift test` plus the installed-app smoke test on macOS for pull requests and pushes to `main`.
 
+Release rule:
+- Ship annotated git tags that match `Resources/Info.plist` `CFBundleShortVersionString`, for example `v0.1.4`.
+
 ## Troubleshooting
 
 If you move or rename the repo and `swift run CodexToolbar` stops compiling with an error like `PCH was compiled with module cache path ...` plus `missing required module 'SwiftShims'`, clear the stale Swift module cache and rerun:

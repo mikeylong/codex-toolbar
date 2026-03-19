@@ -15,6 +15,25 @@ plist_value() {
   /usr/libexec/PlistBuddy -c "Print :$key" "$plist_path"
 }
 
+persist_git_update_metadata() {
+  local source_plist="$ROOT_DIR/Resources/Info.plist"
+  local bundle_identifier upstream remote_name branch_name
+
+  bundle_identifier="$(plist_value "$source_plist" CFBundleIdentifier)"
+  upstream="$(git -C "$ROOT_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+  remote_name="origin"
+  branch_name="main"
+
+  if [[ "$upstream" == */* ]]; then
+    remote_name="${upstream%%/*}"
+    branch_name="${upstream#*/}"
+  fi
+
+  defaults write "$bundle_identifier" "gitUpdate.repositoryRoot" -string "$ROOT_DIR"
+  defaults write "$bundle_identifier" "gitUpdate.remoteName" -string "$remote_name"
+  defaults write "$bundle_identifier" "gitUpdate.branchName" -string "$branch_name"
+}
+
 verify_installed_version_matches_source() {
   local source_plist="$ROOT_DIR/Resources/Info.plist"
   local installed_plist="$TARGET_APP/Contents/Info.plist"
@@ -45,6 +64,7 @@ mkdir -p "$TARGET_DIR"
 rm -rf "$TARGET_APP"
 cp -R "$SOURCE_APP" "$TARGET_APP"
 verify_installed_version_matches_source
+persist_git_update_metadata
 
 if command -v xattr >/dev/null 2>&1; then
   xattr -dr com.apple.quarantine "$TARGET_APP" >/dev/null 2>&1 || true
