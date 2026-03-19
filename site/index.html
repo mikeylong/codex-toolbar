@@ -128,35 +128,36 @@
 
       <section id="install" class="section">
         <div class="wrap install-grid">
-          <div>
+          <div class="install-intro">
             <h2>Install</h2>
-            <p>Download the DMG for the standard install flow, or build from source if you want a repo-backed install.</p>
           </div>
-          <div>
-            <h3>DMG</h3>
-            <p>Download the latest release, open the disk image, and drag the app into Applications.</p>
-            <a
-              class="action-link direct-download-link"
-              href="https://github.com/mikeylong/codex-toolbar/releases/download/v0.1.7/CodexToolbar-0.1.7.dmg"
-            >
-              <span class="download-link-icon" aria-hidden="true">↓</span>
-              <span>Download DMG</span>
-            </a>
-            <p class="release-link-row">
+          <div class="install-options">
+            <div>
+              <h3>Quick Install</h3>
+              <p>Download the latest release, open the disk image, and drag the app into Applications.</p>
               <a
-                class="release-link"
-                href="https://github.com/mikeylong/codex-toolbar/releases/tag/v0.1.7"
+                class="action-link direct-download-link"
+                href="https://github.com/mikeylong/codex-toolbar/releases/download/v0.1.7/CodexToolbar-0.1.7.dmg"
               >
-                v0.1.7 (Latest)
+                <span class="download-link-icon" aria-hidden="true">↓</span>
+                <span>Download DMG</span>
               </a>
-            </p>
-          </div>
-          <div>
-            <h3>Source install</h3>
-            <p>Clone the repository and run the installer script.</p>
-            <pre class="code-block"><code>git clone https://github.com/mikeylong/codex-toolbar.git
+              <p class="release-link-row">
+                <a
+                  class="release-link"
+                  href="https://github.com/mikeylong/codex-toolbar/releases/tag/v0.1.7"
+                >
+                  v0.1.7 (Latest)
+                </a>
+              </p>
+            </div>
+            <div>
+              <h3>Source install</h3>
+              <p>Clone the repository and run the installer script.</p>
+              <pre class="code-block"><code>git clone https://github.com/mikeylong/codex-toolbar.git
 cd codex-toolbar
 ./scripts/install_app.sh</code></pre>
+            </div>
           </div>
         </div>
       </section>

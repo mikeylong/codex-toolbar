@@ -290,6 +290,12 @@ ul {
   font-size: 0.95rem;
 }
 
+.install-options {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.install-options > div,
 .install-grid > div,
 .footer-inner {
   display: grid;
@@ -312,8 +318,8 @@ ul {
     grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
   }
 
-  .install-grid {
-    grid-template-columns: minmax(12rem, 0.6fr) minmax(0, 1fr) minmax(0, 1fr);
+  .install-options {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
   .footer-inner {
