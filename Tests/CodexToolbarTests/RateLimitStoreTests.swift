@@ -691,26 +691,24 @@ final class RateLimitStoreTests: XCTestCase {
 
     func testTimeoutFallbackMapsLoggedOutStateToSignIn() async {
         let client = FakeCodexRateLimitClient()
-        client.loginStatusResults = [.success(.loggedIn), .success(.loggedOut)]
+        client.loginStatusResults = [.success(.loggedIn), .success(.loggedIn), .success(.loggedOut)]
         let store = RateLimitStore(
             client: client,
             reconnectDelayNanoseconds: 10_000_000_000,
-            refreshDelayNanosecondsProvider: { 50_000_000 }
+            refreshDelayNanosecondsProvider: { 10_000_000_000 }
         )
 
         await store.start()
         client.loadSnapshotError = CodexAppServerError.serverError("Timed out reading Codex rate limits.")
         let initialCards = store.cards
 
-        await waitUntil {
-            store.statusMessage == "Sign in to Codex to view rate limits."
-                && client.loadSnapshotCallCount >= 2
-        }
+        await store.refreshNow()
 
         XCTAssertEqual(store.statusMessage, "Sign in to Codex to view rate limits.")
         XCTAssertEqual(store.staleMessage, "Sign in to Codex to view rate limits.")
         XCTAssertEqual(store.cards, initialCards)
-        XCTAssertEqual(client.readLoginStatusCallCount, 2)
+        XCTAssertEqual(client.readLoginStatusCallCount, 3)
+        XCTAssertEqual(client.loadSnapshotCallCount, 2)
     }
 
     func testStartupIgnoresRequiresOpenaiAuthWhenAccountIsPresent() async {
