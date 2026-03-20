@@ -6,9 +6,9 @@ APP_NAME="CodexToolbar"
 DIST_DIR="$ROOT_DIR/dist"
 SOURCE_APP="$DIST_DIR/$APP_NAME.app"
 SOURCE_PLIST="$ROOT_DIR/Resources/Info.plist"
-DMG_STAGING_DIR="$(mktemp -d "$DIST_DIR/codextoolbar-dmg.XXXXXX")"
-VOLUME_STAGING_DIR="$DMG_STAGING_DIR/volume"
-APP_STAGE_DIR="$VOLUME_STAGING_DIR/$APP_NAME.app"
+DMG_STAGING_DIR=""
+VOLUME_STAGING_DIR=""
+APP_STAGE_DIR=""
 
 plist_value() {
   local plist_path="$1"
@@ -123,12 +123,15 @@ notarize_path_if_configured() {
 }
 
 cleanup() {
-  rm -rf "$DMG_STAGING_DIR"
+  [[ -n "$DMG_STAGING_DIR" ]] && rm -rf "$DMG_STAGING_DIR"
 }
 
 trap cleanup EXIT
 
 mkdir -p "$DIST_DIR"
+DMG_STAGING_DIR="$(/usr/bin/mktemp -d "$DIST_DIR/codextoolbar-dmg.XXXXXX")"
+VOLUME_STAGING_DIR="$DMG_STAGING_DIR/volume"
+APP_STAGE_DIR="$VOLUME_STAGING_DIR/$APP_NAME.app"
 validate_distribution_signing_config
 "$ROOT_DIR/scripts/build_app.sh"
 
