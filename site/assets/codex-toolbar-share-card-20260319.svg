@@ -1,0 +1,24 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#EFF6FF"/>
+  <rect x="-109" y="-86" width="615" height="615" rx="307.5" fill="#BFDBFE" fill-opacity="0.85"/>
+  <rect x="772" y="-118" width="420" height="420" rx="210" fill="#A7F3D0" fill-opacity="0.7"/>
+  <rect x="873" y="318" width="278" height="278" rx="139" fill="#BAE6FD" fill-opacity="0.9"/>
+  <rect x="96" y="82" width="1008" height="466" rx="36" fill="white"/>
+  <rect x="97" y="83" width="1006" height="464" rx="35" stroke="#D7E3F4" stroke-width="2"/>
+  <rect x="156" y="142" width="64" height="64" rx="14" fill="#111111"/>
+  <path d="M188 156C170.327 156 156 170.327 156 188C156 205.673 170.327 220 188 220C205.673 220 220 205.673 220 188C220 170.327 205.673 156 188 156ZM176.36 172.293H193.173V178.747H182.893V182.573H192.72V188.947H182.893V203.707H176.36V172.293ZM200.093 203.707H193.56V182.573H200.093V203.707ZM200.093 178.747H193.56V172.293H200.093V178.747Z" fill="white"/>
+  <text x="252" y="179" fill="#111111" font-family="SF Pro Display, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="26" font-weight="700" letter-spacing="-0.02em">
+    Codex Toolbar
+  </text>
+  <text x="156" y="286" fill="#111111" font-family="SF Pro Display, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="76" font-weight="700" letter-spacing="-0.04em">
+    Keep Codex rate limits
+  </text>
+  <text x="156" y="370" fill="#111111" font-family="SF Pro Display, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="76" font-weight="700" letter-spacing="-0.04em">
+    visible in the menu bar.
+  </text>
+  <text x="156" y="452" fill="#4B5563" font-family="SF Pro Text, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="30" font-weight="500">
+    Minimal macOS utility for live Codex usage status.
+  </text>
+  <rect x="156" y="484" width="224" height="14" rx="7" fill="#111111" fill-opacity="0.88"/>
+  <rect x="392" y="484" width="168" height="14" rx="7" fill="#94A3B8"/>
+</svg>
