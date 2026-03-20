@@ -17,6 +17,56 @@ plist_value() {
   /usr/libexec/PlistBuddy -c "Print :$key" "$plist_path"
 }
 
+bool_env_true() {
+  case "${1:l}" in
+    1|true|yes|on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+require_distribution_signing() {
+  if [[ -n "${REQUIRE_DISTRIBUTION_SIGNING:-}" ]]; then
+    bool_env_true "${REQUIRE_DISTRIBUTION_SIGNING}"
+    return $?
+  fi
+
+  bool_env_true "${CI:-false}"
+}
+
+should_verify_dmg_after_build() {
+  if [[ -n "${VERIFY_DMG_AFTER_BUILD:-}" ]]; then
+    bool_env_true "${VERIFY_DMG_AFTER_BUILD}"
+    return $?
+  fi
+
+  if [[ "${CODE_SIGN_IDENTITY:--}" != "-" ]]; then
+    return 0
+  fi
+
+  require_distribution_signing
+}
+
+notarization_is_configured() {
+  [[ -n "${NOTARYTOOL_KEYCHAIN_PROFILE:-}" ]] \
+    || [[ -n "${APPLE_ID:-}" && -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" && -n "${APPLE_TEAM_ID:-}" ]]
+}
+
+validate_distribution_signing_config() {
+  if ! require_distribution_signing; then
+    return 0
+  fi
+
+  if [[ -z "${CODE_SIGN_IDENTITY:-}" || "${CODE_SIGN_IDENTITY:-}" == "-" ]]; then
+    echo "REQUIRE_DISTRIBUTION_SIGNING is enabled, but CODE_SIGN_IDENTITY is missing or ad hoc ('-')." >&2
+    exit 1
+  fi
+
+  if ! notarization_is_configured; then
+    echo "REQUIRE_DISTRIBUTION_SIGNING is enabled, but Apple notarization credentials are not configured." >&2
+    exit 1
+  fi
+}
+
 sign_path() {
   local path="$1"
   local identity="${CODE_SIGN_IDENTITY:--}"
@@ -33,7 +83,13 @@ notarize_path_if_configured() {
   local path="$1"
 
   if [[ -n "${NOTARYTOOL_KEYCHAIN_PROFILE:-}" ]]; then
-    /usr/bin/xcrun notarytool submit "$path" --keychain-profile "$NOTARYTOOL_KEYCHAIN_PROFILE" --wait
+    local -a args=(--keychain-profile "$NOTARYTOOL_KEYCHAIN_PROFILE")
+
+    if [[ -n "${NOTARYTOOL_KEYCHAIN:-}" ]]; then
+      args+=(--keychain "$NOTARYTOOL_KEYCHAIN")
+    fi
+
+    /usr/bin/xcrun notarytool submit "$path" "${args[@]}" --wait
     /usr/bin/xcrun stapler staple "$path"
     return 0
   fi
@@ -59,6 +115,7 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "$DIST_DIR"
+validate_distribution_signing_config
 "$ROOT_DIR/scripts/build_app.sh"
 
 if [[ ! -d "$SOURCE_APP" ]]; then
@@ -91,6 +148,10 @@ rm -f "$TEMP_DMG" "$FINAL_DMG"
 mv "$TEMP_DMG" "$FINAL_DMG"
 sign_path "$FINAL_DMG"
 notarize_path_if_configured "$FINAL_DMG"
+
+if should_verify_dmg_after_build; then
+  "$ROOT_DIR/scripts/verify_dmg.sh" "$FINAL_DMG"
+fi
 
 echo "Built DMG:"
 echo "$FINAL_DMG"

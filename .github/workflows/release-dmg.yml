@@ -22,7 +22,23 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
+          fetch-depth: 0
+
+      - name: Prepare source tree for manual backfill
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          TARGET_TAG="${{ inputs.tag }}"
+          git fetch --force origin "refs/tags/$TARGET_TAG:refs/tags/$TARGET_TAG"
+          git checkout "$TARGET_TAG" -- .
+          git checkout HEAD -- scripts/build_dmg.sh scripts/verify_dmg.sh
+
+          APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
+
+          if [[ "v$APP_VERSION" != "$TARGET_TAG" ]]; then
+            echo "Checked out source version v$APP_VERSION does not match requested tag $TARGET_TAG." >&2
+            exit 1
+          fi
 
       - name: Validate signing and notarization secrets
         env:
@@ -30,9 +46,8 @@ jobs:
           MACOS_DEVELOPER_ID_APPLICATION_P12_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_P12_PASSWORD }}
           MACOS_BUILD_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_BUILD_KEYCHAIN_PASSWORD }}
           MACOS_DEVELOPER_ID_APPLICATION_IDENTITY: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
         run: |
           missing=()
 
@@ -41,9 +56,8 @@ jobs:
             MACOS_DEVELOPER_ID_APPLICATION_P12_PASSWORD \
             MACOS_BUILD_KEYCHAIN_PASSWORD \
             MACOS_DEVELOPER_ID_APPLICATION_IDENTITY \
-            APPLE_ID \
-            APPLE_APP_SPECIFIC_PASSWORD \
-            APPLE_TEAM_ID; do
+            APPLE_API_KEY_P8 \
+            APPLE_API_KEY_ID; do
             if [[ -z "${!secret_name}" ]]; then
               missing+=("$secret_name")
             fi
@@ -64,6 +78,14 @@ jobs:
             -nokeys \
             -clcerts >/dev/null 2>&1; then
             echo "Decoded MACOS_DEVELOPER_ID_APPLICATION_P12 is not a valid PKCS#12 payload or the password is incorrect." >&2
+            exit 1
+          fi
+
+          api_key_path="$RUNNER_TEMP/AuthKey_$APPLE_API_KEY_ID.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$api_key_path"
+
+          if ! openssl pkey -in "$api_key_path" -pubout >/dev/null 2>&1; then
+            echo "Decoded APPLE_API_KEY_P8 is not a valid App Store Connect API private key." >&2
             exit 1
           fi
 
@@ -93,14 +115,60 @@ jobs:
           security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          echo "BUILD_KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Store notarization credentials
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          KEYCHAIN_PATH="${BUILD_KEYCHAIN_PATH:-$RUNNER_TEMP/codesign.keychain-db}"
+          API_KEY_PATH="$RUNNER_TEMP/AuthKey_$APPLE_API_KEY_ID.p8"
+          PROFILE_NAME="codextoolbar-notary"
+
+          printf '%s' "$APPLE_API_KEY_P8" > "$API_KEY_PATH"
+          chmod 600 "$API_KEY_PATH"
+
+          args=(
+            store-credentials
+            "$PROFILE_NAME"
+            --key "$API_KEY_PATH"
+            --key-id "$APPLE_API_KEY_ID"
+            --keychain "$KEYCHAIN_PATH"
+            --validate
+          )
+
+          if [[ -n "${APPLE_API_ISSUER_ID:-}" ]]; then
+            args+=(--issuer "$APPLE_API_ISSUER_ID")
+          fi
+
+          xcrun notarytool "${args[@]}"
+
+          echo "NOTARYTOOL_KEYCHAIN_PROFILE=$PROFILE_NAME" >> "$GITHUB_ENV"
+          echo "NOTARYTOOL_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
       - name: Build signed and notarized DMG
         env:
           CODE_SIGN_IDENTITY: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          REQUIRE_DISTRIBUTION_SIGNING: "true"
+          VERIFY_DMG_AFTER_BUILD: "true"
         run: ./scripts/build_dmg.sh
+
+      - name: Verify DMG before upload
+        run: ./scripts/verify_dmg.sh dist/*.dmg
+
+      - name: Delete existing DMG asset when backfilling
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ inputs.tag }}"
+          DMG_NAME="CodexToolbar-${TAG#v}.dmg"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release delete-asset "$TAG" "$DMG_NAME" --yes >/dev/null 2>&1 || true
+          fi
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
