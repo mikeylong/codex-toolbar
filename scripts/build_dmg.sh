@@ -81,6 +81,8 @@ sign_path() {
 
 notarize_path_if_configured() {
   local path="$1"
+  local submit_path="$path"
+  local archive_path=""
 
   if [[ -n "${NOTARYTOOL_KEYCHAIN_PROFILE:-}" ]]; then
     local -a args=(--keychain-profile "$NOTARYTOOL_KEYCHAIN_PROFILE")
@@ -89,8 +91,20 @@ notarize_path_if_configured() {
       args+=(--keychain "$NOTARYTOOL_KEYCHAIN")
     fi
 
-    /usr/bin/xcrun notarytool submit "$path" "${args[@]}" --wait
+    if [[ -d "$path" && "$path" == *.app ]]; then
+      archive_path="$(/usr/bin/mktemp "$DIST_DIR/notary-submit.XXXXXX")"
+      /bin/rm -f "$archive_path"
+      archive_path="$archive_path.zip"
+      /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$path" "$archive_path"
+      submit_path="$archive_path"
+    fi
+
+    /usr/bin/xcrun notarytool submit "$submit_path" "${args[@]}" --wait
     /usr/bin/xcrun stapler staple "$path"
+
+    if [[ -n "$archive_path" ]]; then
+      /bin/rm -f "$archive_path"
+    fi
     return 0
   fi
 
