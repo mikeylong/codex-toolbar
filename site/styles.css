@@ -116,7 +116,6 @@ li {
 pre {
   overflow-x: auto;
   padding: var(--space-2);
-  border: 1px solid var(--border);
   background: var(--surface-muted);
   border-radius: 8px;
 }
