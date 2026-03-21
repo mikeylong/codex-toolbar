@@ -247,10 +247,6 @@ ul {
   text-decoration: none;
 }
 
-.primary-action {
-  color: var(--text);
-}
-
 .feature-list {
   display: grid;
   gap: 0.75rem;
