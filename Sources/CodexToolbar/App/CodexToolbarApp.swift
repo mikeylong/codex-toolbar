@@ -458,7 +458,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private static func statusItemImage() -> NSImage {
-        if let image = Bundle.module.image(forResource: "CodexStatusGlyphWhite") {
+        if let image = StatusItemAssetLoader.image(named: "CodexStatusGlyph") {
             image.isTemplate = false
             image.size = NSSize(width: 16, height: 16)
             return image
@@ -492,7 +492,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         trackColor: NSColor,
         fillColor: NSColor
     ) -> NSImage {
-        _ = glyphColor
         let glyphSize = NSSize(width: 16, height: 16)
         let gap: CGFloat = 4
         let barSize = NSSize(width: 44, height: 6)
@@ -530,6 +529,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static func drawTintedGlyph(in rect: NSRect, color: NSColor) {
         let glyphImage = statusItemImage()
         glyphImage.draw(in: rect)
+        color.setFill()
+        rect.fill(using: .sourceIn)
     }
 
     private static func drawBar(
@@ -702,6 +703,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+enum StatusItemAssetLoader {
+    private static let resourceBundleDirectoryName = "CodexToolbar_CodexToolbar.bundle"
+
+    static func image(
+        named resourceName: String,
+        mainBundle: Bundle = .main,
+        allBundles: [Bundle] = Bundle.allBundles,
+        allFrameworks: [Bundle] = Bundle.allFrameworks,
+        fileManager: FileManager = .default
+    ) -> NSImage? {
+        guard let bundle = resourceBundle(
+            mainBundle: mainBundle,
+            allBundles: allBundles,
+            allFrameworks: allFrameworks,
+            fileManager: fileManager
+        ) else {
+            return nil
+        }
+
+        return bundle.image(forResource: resourceName)
+    }
+
+    static func resourceBundle(
+        mainBundle: Bundle = .main,
+        allBundles: [Bundle] = Bundle.allBundles,
+        allFrameworks: [Bundle] = Bundle.allFrameworks,
+        fileManager: FileManager = .default
+    ) -> Bundle? {
+        for candidateURL in candidateBundleURLs(
+            mainBundle: mainBundle,
+            allBundles: allBundles,
+            allFrameworks: allFrameworks
+        ) {
+            guard fileManager.fileExists(atPath: candidateURL.path) else {
+                continue
+            }
+
+            if let bundle = Bundle(url: candidateURL) {
+                return bundle
+            }
+        }
+
+        return nil
+    }
+
+    static func candidateBundleURLs(
+        mainBundle: Bundle = .main,
+        allBundles: [Bundle] = Bundle.allBundles,
+        allFrameworks: [Bundle] = Bundle.allFrameworks
+    ) -> [URL] {
+        var urls: [URL] = []
+        var seenPaths = Set<String>()
+
+        for bundle in [mainBundle] + allBundles + allFrameworks {
+            register(resourceBundleURL(from: bundle), into: &urls, seenPaths: &seenPaths)
+
+            let bundleURL = bundle.bundleURL.resolvingSymlinksInPath().standardizedFileURL
+            if bundleURL.lastPathComponent == resourceBundleDirectoryName {
+                register(bundleURL, into: &urls, seenPaths: &seenPaths)
+            }
+        }
+
+        return urls
+    }
+
+    private static func resourceBundleURL(from bundle: Bundle) -> URL? {
+        guard let resourceURL = bundle.resourceURL else {
+            return nil
+        }
+
+        return resourceURL
+            .appendingPathComponent(resourceBundleDirectoryName, isDirectory: true)
+            .resolvingSymlinksInPath()
+            .standardizedFileURL
+    }
+
+    private static func register(
+        _ url: URL?,
+        into urls: inout [URL],
+        seenPaths: inout Set<String>
+    ) {
+        guard let url else {
+            return
+        }
+
+        if seenPaths.insert(url.path).inserted {
+            urls.append(url)
+        }
+    }
+}
+
 enum AppVersion {
     static let current: String = {
         if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
@@ -713,7 +805,7 @@ enum AppVersion {
             return version
         }
 
-        return "0.1.7"
+        return "0.1.8"
     }()
 
     private static func developmentVersionFromSourceInfoPlist() -> String? {

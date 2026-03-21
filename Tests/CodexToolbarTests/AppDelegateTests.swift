@@ -211,6 +211,45 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertNotEqual(try pixelData(for: warningImage, in: barRegion), try pixelData(for: criticalImage, in: barRegion))
     }
 
+    func testReadyStatusItemImageAppliesGlyphTintWithoutFlatteningTransparency() throws {
+        let appearance = try XCTUnwrap(NSAppearance(named: .aqua))
+        let glyphColor = NSColor(calibratedRed: 1.0, green: 0.0, blue: 0.0, alpha: 1.0)
+        let image = AppDelegate.readyStatusItemImage(
+            bar: .init(remainingPercent: 50, progressState: .normal),
+            appearance: appearance,
+            glyphColor: glyphColor,
+            trackColor: NSColor(calibratedWhite: 0.2, alpha: 1.0),
+            fillColor: NSColor(calibratedWhite: 0.6, alpha: 1.0)
+        )
+        let bitmap = try renderedBitmap(for: image)
+        var transparentPixelCount = 0
+        var tintedPixelCount = 0
+
+        for y in 0..<16 {
+            for x in 0..<16 {
+                let color = try XCTUnwrap(
+                    bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB)
+                )
+
+                if color.alphaComponent < 0.05 {
+                    transparentPixelCount += 1
+                }
+
+                if
+                    color.alphaComponent > 0.2,
+                    color.redComponent > 0.7,
+                    color.greenComponent < 0.3,
+                    color.blueComponent < 0.3
+                {
+                    tintedPixelCount += 1
+                }
+            }
+        }
+
+        XCTAssertGreaterThan(transparentPixelCount, 0)
+        XCTAssertGreaterThan(tintedPixelCount, 0)
+    }
+
     func testUpdateStatusItemButtonSetsReadyTooltipWithoutChangingAccessibilityLabel() throws {
         let store = RateLimitStore(
             client: FakeStatusItemRateLimitClient(),
@@ -385,6 +424,23 @@ final class AppDelegateTests: XCTestCase {
     }
 
     private func pixelData(for image: NSImage, in region: NSRect) throws -> Data {
+        let bitmap = try renderedBitmap(for: image)
+
+        var bytes: [UInt8] = []
+        for y in Int(region.minY)..<Int(region.maxY) {
+            for x in Int(region.minX)..<Int(region.maxX) {
+                let color = try XCTUnwrap(bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB))
+                bytes.append(UInt8((color.redComponent * 255).rounded()))
+                bytes.append(UInt8((color.greenComponent * 255).rounded()))
+                bytes.append(UInt8((color.blueComponent * 255).rounded()))
+                bytes.append(UInt8((color.alphaComponent * 255).rounded()))
+            }
+        }
+
+        return Data(bytes)
+    }
+
+    private func renderedBitmap(for image: NSImage) throws -> NSBitmapImageRep {
         let pixelsWide = Int(image.size.width)
         let pixelsHigh = Int(image.size.height)
         let bitmap = try XCTUnwrap(
@@ -408,18 +464,7 @@ final class AppDelegateTests: XCTestCase {
         image.draw(in: NSRect(origin: .zero, size: image.size))
         NSGraphicsContext.restoreGraphicsState()
 
-        var bytes: [UInt8] = []
-        for y in Int(region.minY)..<Int(region.maxY) {
-            for x in Int(region.minX)..<Int(region.maxX) {
-                let color = try XCTUnwrap(bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB))
-                bytes.append(UInt8((color.redComponent * 255).rounded()))
-                bytes.append(UInt8((color.greenComponent * 255).rounded()))
-                bytes.append(UInt8((color.blueComponent * 255).rounded()))
-                bytes.append(UInt8((color.alphaComponent * 255).rounded()))
-            }
-        }
-
-        return Data(bytes)
+        return bitmap
     }
 }
 

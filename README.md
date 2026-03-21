@@ -80,10 +80,32 @@ GitHub Actions runs `swift test` plus the installed-app smoke test on macOS for 
 Tagged releases also build and upload a signed DMG to GitHub Releases.
 
 Release rule:
-- Ship annotated git tags that match `Resources/Info.plist` `CFBundleShortVersionString`, for example `v0.1.7`.
+- Ship annotated git tags that match `Resources/Info.plist` `CFBundleShortVersionString`, for example `v0.1.8`.
 - GitHub release DMGs must be signed with a real `Developer ID Application` identity and stapled after notarization. An ad hoc DMG will trigger the macOS "Apple could not verify it is free of malware" warning when downloaded from GitHub.
 - The `Release DMG` workflow expects these repository secrets before a tag is published: `MACOS_DEVELOPER_ID_APPLICATION_P12`, `MACOS_DEVELOPER_ID_APPLICATION_P12_PASSWORD`, `MACOS_BUILD_KEYCHAIN_PASSWORD`, `MACOS_DEVELOPER_ID_APPLICATION_IDENTITY`, `APPLE_API_KEY_P8`, and `APPLE_API_KEY_ID`.
 - `APPLE_API_ISSUER_ID` is optional. Set it for a team App Store Connect API key; leave it unset for an individual key.
+
+Local notarized DMG setup:
+- Save the App Store Connect API key to disk, for example `~/.keys/AuthKey_<KEY_ID>.p8`, with `chmod 600`.
+- Create a reusable local notary profile:
+
+```bash
+xcrun notarytool store-credentials codextoolbar-notary \
+  --key ~/.keys/AuthKey_<KEY_ID>.p8 \
+  --key-id <KEY_ID> \
+  --issuer <ISSUER_UUID> \
+  --validate
+```
+
+- Build and verify a notarized DMG using the installed Developer ID identity:
+
+```bash
+CODE_SIGN_IDENTITY='Developer ID Application: Michael Long (2468833C5L)' \
+NOTARYTOOL_KEYCHAIN_PROFILE='codextoolbar-notary' \
+REQUIRE_DISTRIBUTION_SIGNING=true \
+VERIFY_DMG_AFTER_BUILD=true \
+./scripts/build_dmg.sh
+```
 
 ## Troubleshooting
 

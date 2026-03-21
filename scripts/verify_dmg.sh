@@ -65,11 +65,66 @@ assert_gatekeeper_accepts_app() {
   fi
 }
 
+run_packaged_app_smoke_test() {
+  local app_path="$1"
+  local executable_path="$app_path/Contents/MacOS/CodexToolbar"
+  local diagnostics_path="$SMOKE_TEST_DIR/startup-diagnostics.json"
+  local stdout_log="$SMOKE_TEST_DIR/stdout.log"
+  local stderr_log="$SMOKE_TEST_DIR/stderr.log"
+  local app_pid=""
+  local exit_code=0
+  local waited_seconds=0
+
+  if [[ ! -x "$executable_path" ]]; then
+    fail "App executable is missing or not executable: $executable_path"
+  fi
+
+  "$executable_path" \
+    --screenshot-scenario normal \
+    --screenshot-capture-popover false \
+    --screenshot-capture-status-item false \
+    --screenshot-open-popover false \
+    --startup-diagnostics-output "$diagnostics_path" \
+    --startup-diagnostics-exit true \
+    >"$stdout_log" 2>"$stderr_log" &
+  app_pid="$!"
+
+  while kill -0 "$app_pid" >/dev/null 2>&1; do
+    if [[ -s "$diagnostics_path" ]]; then
+      break
+    fi
+
+    if (( waited_seconds >= 20 )); then
+      kill "$app_pid" >/dev/null 2>&1 || true
+      wait "$app_pid" >/dev/null 2>&1 || true
+      fail "Packaged app smoke test timed out before writing startup diagnostics: $app_path"
+    fi
+
+    sleep 1
+    (( waited_seconds += 1 ))
+  done
+
+  if ! wait "$app_pid"; then
+    exit_code=$?
+    fail "Packaged app smoke test exited with status $exit_code: $app_path"
+  fi
+
+  if [[ ! -s "$diagnostics_path" ]]; then
+    fail "Packaged app smoke test did not write startup diagnostics: $app_path"
+  fi
+
+  if ! /usr/bin/python3 -c 'import json, sys; json.load(open(sys.argv[1]))' "$diagnostics_path" >/dev/null 2>&1; then
+    fail "Packaged app smoke test wrote invalid startup diagnostics JSON: $diagnostics_path"
+  fi
+}
+
 MOUNT_POINT="$(mktemp -d "${TMPDIR:-/tmp}/codextoolbar-dmg-mount.XXXXXX")"
+SMOKE_TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/codextoolbar-dmg-smoke.XXXXXX")"
 
 cleanup() {
   /usr/bin/hdiutil detach "$MOUNT_POINT" -quiet >/dev/null 2>&1 || true
   rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true
+  rm -rf "$SMOKE_TEST_DIR" >/dev/null 2>&1 || true
 }
 
 trap cleanup EXIT
@@ -96,6 +151,7 @@ if ! /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH" >/dev/nu
 fi
 
 assert_gatekeeper_accepts_app "$APP_PATH"
+run_packaged_app_smoke_test "$APP_PATH"
 
 echo "Verified DMG:"
 echo "$DMG_PATH"
