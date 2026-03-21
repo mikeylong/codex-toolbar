@@ -291,6 +291,17 @@ ul {
   gap: var(--space-4);
 }
 
+.install-help .code-block {
+  margin: 0;
+  width: fit-content;
+  max-width: 100%;
+  justify-self: start;
+}
+
+.install-help-link {
+  margin-top: calc(var(--space-1) * -0.25);
+}
+
 .install-options > div,
 .install-grid > div,
 .footer-inner {
