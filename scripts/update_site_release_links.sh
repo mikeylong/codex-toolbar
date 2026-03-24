@@ -20,4 +20,4 @@ RELEASE_URL="https://github.com/mikeylong/codex-toolbar/releases/tag/$TAG"
 
 perl -0pi -e 's@href="https://github\.com/mikeylong/codex-toolbar/releases/download/v[0-9]+\.[0-9]+\.[0-9]+/CodexToolbar-[0-9]+\.[0-9]+\.[0-9]+\.dmg"@href="'"$DMG_URL"'"@g' "$SITE_INDEX"
 perl -0pi -e 's@href="https://github\.com/mikeylong/codex-toolbar/releases/tag/v[0-9]+\.[0-9]+\.[0-9]+"@href="'"$RELEASE_URL"'"@g' "$SITE_INDEX"
-perl -0pi -e 's@>v[0-9]+\.[0-9]+\.[0-9]+ \(Latest\)<@>'"$TAG"' (Latest)<@g' "$SITE_INDEX"
+perl -0pi -e 's@v[0-9]+\.[0-9]+\.[0-9]+ \(Latest\)@'"$TAG"' (Latest)@g' "$SITE_INDEX"
