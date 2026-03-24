@@ -500,6 +500,110 @@ final class RateLimitStoreTests: XCTestCase {
         XCTAssertEqual(cards[0].title, "2 Week")
     }
 
+    func testMakeCreditViewDataMapsUnlimitedState() {
+        let creditViewData = RateLimitStore.makeCreditViewData(
+            from: CreditsSnapshot(balance: "243", hasCredits: true, unlimited: true)
+        )
+
+        XCTAssertEqual(creditViewData?.balanceText, "243.00")
+        XCTAssertEqual(creditViewData?.stateText, "Unlimited")
+    }
+
+    func testMakeCreditViewDataRoundsLongDecimalBalanceToTwoPlaces() {
+        let creditViewData = RateLimitStore.makeCreditViewData(
+            from: CreditsSnapshot(balance: "243.0000000000", hasCredits: true, unlimited: false)
+        )
+
+        XCTAssertEqual(creditViewData?.balanceText, "243.00")
+        XCTAssertEqual(creditViewData?.stateText, "Credits available")
+    }
+
+    func testMakeCreditViewDataMapsCreditsAvailableStateWithBalance() {
+        let creditViewData = RateLimitStore.makeCreditViewData(
+            from: CreditsSnapshot(balance: "123 credit remaining", hasCredits: true, unlimited: false)
+        )
+
+        XCTAssertEqual(creditViewData?.balanceText, "123 credit remaining")
+        XCTAssertEqual(creditViewData?.stateText, "Credits available")
+    }
+
+    func testMakeCreditViewDataMapsNoCreditsStateWithoutBalance() {
+        let creditViewData = RateLimitStore.makeCreditViewData(
+            from: CreditsSnapshot(balance: "   ", hasCredits: false, unlimited: false)
+        )
+
+        XCTAssertNil(creditViewData?.balanceText)
+        XCTAssertEqual(creditViewData?.stateText, "No credits")
+    }
+
+    func testVisibleCreditViewDataReturnsNilWhenNoCreditsAvailable() {
+        let store = RateLimitStore(
+            client: FakeCodexRateLimitClient(),
+            initialState: .ready,
+            initialCards: [
+                RateLimitCardViewData(
+                    window: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 42, windowDurationMins: 300),
+                    familyId: "codex"
+                )
+            ],
+            initialCreditViewData: nil,
+            initialStatusMessage: "Rate limits remaining",
+            liveUpdatesEnabled: false
+        )
+
+        XCTAssertNil(store.visibleCreditViewData(visibleSupplementalFamilyIDs: []))
+    }
+
+    func testVisibleCreditViewDataReturnsDataWhenCardsAndCreditsExist() {
+        let store = RateLimitStore(
+            client: FakeCodexRateLimitClient(),
+            initialState: .ready,
+            initialCards: [
+                RateLimitCardViewData(
+                    window: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 42, windowDurationMins: 300),
+                    familyId: "codex"
+                )
+            ],
+            initialCreditViewData: .init(balanceText: "243 credit remaining", stateText: "Credits available"),
+            initialStatusMessage: "Rate limits remaining",
+            liveUpdatesEnabled: false
+        )
+
+        XCTAssertEqual(
+            store.visibleCreditViewData(visibleSupplementalFamilyIDs: []),
+            .init(balanceText: "243 credit remaining", stateText: "Credits available")
+        )
+    }
+
+    func testStoreAppliesCreditDataFromSnapshotResponse() async {
+        let client = FakeCodexRateLimitClient()
+        client.rateLimitResponse = GetAccountRateLimitsResponse(
+            rateLimits: CodexRateLimitsSnapshot(
+                credits: CreditsSnapshot(balance: "243 credit remaining", hasCredits: true, unlimited: false),
+                limitId: "codex",
+                limitName: "Codex",
+                planType: .pro,
+                primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 22, windowDurationMins: 300),
+                secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 44, windowDurationMins: 10_080)
+            ),
+            rateLimitsByLimitId: nil
+        )
+        let store = RateLimitStore(
+            client: client,
+            reconnectDelayNanoseconds: 10_000_000_000,
+            refreshDelayNanosecondsProvider: { 10_000_000_000 }
+        )
+
+        await store.start()
+
+        XCTAssertEqual(
+            store.creditViewData,
+            .init(balanceText: "243 credit remaining", stateText: "Credits available")
+        )
+
+        await store.stop()
+    }
+
     func testReconnectsAfterDisconnectEvent() async {
         let client = FakeCodexRateLimitClient()
         let store = RateLimitStore(
@@ -788,6 +892,17 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
     var loadSnapshotError: Error?
     var loginStatusResults: [Result<CodexLoginStatus, Error>] = []
     var accountResponse = GetAccountResponse(account: .chatgpt(email: "mike@example.com", planType: .pro), requiresOpenaiAuth: false)
+    var rateLimitResponse = GetAccountRateLimitsResponse(
+        rateLimits: CodexRateLimitsSnapshot(
+            credits: nil,
+            limitId: "codex",
+            limitName: "Codex",
+            planType: .pro,
+            primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 88, windowDurationMins: 300),
+            secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 92, windowDurationMins: 10080)
+        ),
+        rateLimitsByLimitId: nil
+    )
     var pauseNextLoadSnapshot = false
     private var isConnected = false
 
@@ -817,17 +932,7 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
             throw failReadRateLimits
         }
 
-        return GetAccountRateLimitsResponse(
-            rateLimits: CodexRateLimitsSnapshot(
-                credits: nil,
-                limitId: "codex",
-                limitName: "Codex",
-                planType: .pro,
-                primary: CodexRateLimitWindow(resetsAt: 1_741_171_240, usedPercent: 88, windowDurationMins: 300),
-                secondary: CodexRateLimitWindow(resetsAt: 1_741_731_200, usedPercent: 92, windowDurationMins: 10080)
-            ),
-            rateLimitsByLimitId: nil
-        )
+        return rateLimitResponse
     }
 
     func readLoginStatus() async throws -> CodexLoginStatus {

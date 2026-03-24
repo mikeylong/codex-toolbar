@@ -27,6 +27,11 @@ final class RateLimitStore {
         let progressState: RateLimitProgressState
     }
 
+    struct CreditViewData: Equatable, Sendable {
+        let balanceText: String?
+        let stateText: String
+    }
+
     enum StatusItemPresentation: Equatable, Sendable {
         case text(String)
         case bar(StatusItemBarPresentation)
@@ -34,6 +39,7 @@ final class RateLimitStore {
 
     var state: State = .idle
     var cards: [RateLimitCardViewData] = []
+    var creditViewData: CreditViewData?
     var statusMessage = "Connecting to Codex…"
     var lastUpdated: Date?
     var staleMessage: String?
@@ -54,6 +60,7 @@ final class RateLimitStore {
         refreshDelayNanosecondsProvider: @escaping @Sendable () -> UInt64 = { RateLimitStore.defaultRefreshDelayNanoseconds() },
         initialState: State = .idle,
         initialCards: [RateLimitCardViewData] = [],
+        initialCreditViewData: CreditViewData? = nil,
         initialStatusMessage: String = "Connecting to Codex…",
         initialLastUpdated: Date? = nil,
         liveUpdatesEnabled: Bool = true
@@ -64,6 +71,7 @@ final class RateLimitStore {
         self.liveUpdatesEnabled = liveUpdatesEnabled
         state = initialState
         cards = initialCards
+        creditViewData = initialCreditViewData
         statusMessage = initialStatusMessage
         lastUpdated = initialLastUpdated
     }
@@ -134,6 +142,14 @@ final class RateLimitStore {
 
     func visibleCardSections(visibleSupplementalFamilyIDs: Set<String>) -> [RateLimitCardSectionViewData] {
         Self.makeCardSections(from: visibleCards(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs))
+    }
+
+    func visibleCreditViewData(visibleSupplementalFamilyIDs: Set<String>) -> CreditViewData? {
+        guard !visibleCards(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs).isEmpty else {
+            return nil
+        }
+
+        return creditViewData
     }
 
     var statusBarText: String {
@@ -241,6 +257,7 @@ final class RateLimitStore {
 
     private func apply(_ response: GetAccountRateLimitsResponse) {
         cards = Self.makeCards(from: response)
+        creditViewData = Self.makeCreditViewData(from: response.displaySnapshot().credits)
         lastUpdated = Date()
 
         if cards.isEmpty {
@@ -436,6 +453,51 @@ final class RateLimitStore {
             locale: locale,
             timeZone: timeZone
         )
+    }
+
+    static func makeCreditViewData(from credits: CreditsSnapshot?) -> CreditViewData? {
+        guard let credits else {
+            return nil
+        }
+
+        let trimmedBalance = credits.balance?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let balanceText = formattedCreditBalanceText(trimmedBalance)
+
+        let stateText: String
+        if credits.unlimited {
+            stateText = "Unlimited"
+        } else if credits.hasCredits {
+            stateText = "Credits available"
+        } else {
+            stateText = "No credits"
+        }
+
+        return CreditViewData(balanceText: balanceText, stateText: stateText)
+    }
+
+    private static func formattedCreditBalanceText(_ rawBalance: String?) -> String? {
+        guard let rawBalance, !rawBalance.isEmpty else {
+            return nil
+        }
+
+        let numericPattern = #"^[+-]?(?:\d+\.?\d*|\.\d+)$"#
+        guard rawBalance.range(of: numericPattern, options: .regularExpression) != nil else {
+            return rawBalance
+        }
+
+        guard let decimal = Decimal(string: rawBalance, locale: Locale(identifier: "en_US_POSIX")) else {
+            return rawBalance
+        }
+
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        formatter.roundingMode = .halfUp
+        formatter.groupingSeparator = ""
+
+        return formatter.string(from: decimal as NSNumber) ?? rawBalance
     }
 
     static func makeCardSections(from cards: [RateLimitCardViewData]) -> [RateLimitCardSectionViewData] {

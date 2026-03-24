@@ -143,4 +143,30 @@ final class RateLimitDecodingTests: XCTestCase {
         XCTAssertNil(response.displaySnapshot().primary)
         XCTAssertEqual(response.displaySnapshot().secondary?.usedPercent, 92)
     }
+
+    func testDecodesCreditSnapshotFields() throws {
+        let json = """
+        {
+          "rateLimits": {
+            "credits": {
+              "balance": "243 credit remaining",
+              "hasCredits": true,
+              "unlimited": false
+            },
+            "limitId": "codex",
+            "limitName": "Codex",
+            "planType": "pro",
+            "primary": { "resetsAt": 1741269240, "usedPercent": 12, "windowDurationMins": 300 },
+            "secondary": null
+          },
+          "rateLimitsByLimitId": null
+        }
+        """
+
+        let response = try JSONDecoder().decode(GetAccountRateLimitsResponse.self, from: Data(json.utf8))
+
+        XCTAssertEqual(response.displaySnapshot().credits?.balance, "243 credit remaining")
+        XCTAssertEqual(response.displaySnapshot().credits?.hasCredits, true)
+        XCTAssertEqual(response.displaySnapshot().credits?.unlimited, false)
+    }
 }

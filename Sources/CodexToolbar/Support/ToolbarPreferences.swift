@@ -6,6 +6,7 @@ final class ToolbarPreferences {
 
     private enum Keys {
         static let visibleSupplementalFamilyPrefix = "visibleSupplementalFamily."
+        static let showCredits = "showCredits"
         static let gitUpdateRepositoryRoot = "gitUpdate.repositoryRoot"
         static let gitUpdateRemoteName = "gitUpdate.remoteName"
         static let gitUpdateBranchName = "gitUpdate.branchName"
@@ -50,6 +51,22 @@ final class ToolbarPreferences {
                 return family.limitId
             }
         )
+    }
+
+    var isCreditsVisible: Bool {
+        if defaults.object(forKey: Keys.showCredits) == nil {
+            return false
+        }
+
+        return defaults.bool(forKey: Keys.showCredits)
+    }
+
+    func setCreditsVisible(_ isVisible: Bool) {
+        defaults.set(isVisible, forKey: Keys.showCredits)
+    }
+
+    func toggleCreditsVisibility() {
+        setCreditsVisible(!isCreditsVisible)
     }
 
     func gitUpdateRepositoryConfiguration() -> GitUpdateRepositoryConfiguration? {

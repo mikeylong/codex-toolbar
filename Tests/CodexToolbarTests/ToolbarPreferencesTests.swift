@@ -3,6 +3,35 @@ import XCTest
 
 @MainActor
 final class ToolbarPreferencesTests: XCTestCase {
+    func testCreditsVisibilityDefaultsToHidden() {
+        let defaults = Self.makeDefaults()
+        let preferences = ToolbarPreferences(defaults: defaults)
+
+        XCTAssertFalse(preferences.isCreditsVisible)
+    }
+
+    func testCreditsVisibilitySetRoundTrips() {
+        let defaults = Self.makeDefaults()
+        let preferences = ToolbarPreferences(defaults: defaults)
+
+        preferences.setCreditsVisible(true)
+        XCTAssertTrue(preferences.isCreditsVisible)
+
+        preferences.setCreditsVisible(false)
+        XCTAssertFalse(preferences.isCreditsVisible)
+    }
+
+    func testCreditsVisibilityToggleFlipsStoredValue() {
+        let defaults = Self.makeDefaults()
+        let preferences = ToolbarPreferences(defaults: defaults)
+
+        preferences.toggleCreditsVisibility()
+        XCTAssertTrue(preferences.isCreditsVisible)
+
+        preferences.toggleCreditsVisibility()
+        XCTAssertFalse(preferences.isCreditsVisible)
+    }
+
     func testGitUpdateRepositoryConfigurationRoundTrips() {
         let defaults = Self.makeDefaults()
         let preferences = ToolbarPreferences(defaults: defaults)

@@ -75,7 +75,7 @@ final class AppDelegateTests: XCTestCase {
 
         let menu = delegate.makeContextMenu()
 
-        XCTAssertEqual(menu.items.count, 6)
+        XCTAssertEqual(menu.items.count, 7)
         XCTAssertEqual(menu.items[0].title, "Refresh now")
         XCTAssertTrue(
             menu.items[1].title == "Launch at login" ||
@@ -83,10 +83,12 @@ final class AppDelegateTests: XCTestCase {
         )
         XCTAssertEqual(menu.items[2].title, "Show GPT-5.3-Codex-Spark")
         XCTAssertEqual(menu.items[2].state, NSControl.StateValue.off)
-        XCTAssertTrue(menu.items[3].isSeparatorItem)
-        XCTAssertEqual(menu.items[4].title, "Version \(AppVersion.current)")
-        XCTAssertFalse(menu.items[4].isEnabled)
-        XCTAssertEqual(menu.items[5].title, "Quit")
+        XCTAssertEqual(menu.items[3].title, "Show credits")
+        XCTAssertEqual(menu.items[3].state, NSControl.StateValue.off)
+        XCTAssertTrue(menu.items[4].isSeparatorItem)
+        XCTAssertEqual(menu.items[5].title, "Version \(AppVersion.current)")
+        XCTAssertFalse(menu.items[5].isEnabled)
+        XCTAssertEqual(menu.items[6].title, "Quit")
     }
 
     func testContextMenuShowsUpdateItemsAboveVersionWhenUpdateIsAvailable() {
@@ -104,13 +106,13 @@ final class AppDelegateTests: XCTestCase {
 
         let menu = delegate.makeContextMenu()
 
-        XCTAssertEqual(menu.items.count, 8)
-        XCTAssertEqual(menu.items[4].title, "Update available: v0.1.4")
-        XCTAssertFalse(menu.items[4].isEnabled)
-        XCTAssertEqual(menu.items[5].title, "Install update")
-        XCTAssertTrue(menu.items[5].isEnabled)
-        XCTAssertEqual(menu.items[6].title, "Version \(AppVersion.current)")
-        XCTAssertEqual(menu.items[7].title, "Quit")
+        XCTAssertEqual(menu.items.count, 9)
+        XCTAssertEqual(menu.items[5].title, "Update available: v0.1.4")
+        XCTAssertFalse(menu.items[5].isEnabled)
+        XCTAssertEqual(menu.items[6].title, "Install update")
+        XCTAssertTrue(menu.items[6].isEnabled)
+        XCTAssertEqual(menu.items[7].title, "Version \(AppVersion.current)")
+        XCTAssertEqual(menu.items[8].title, "Quit")
     }
 
     func testContextMenuShowsDownloadUpdateForReleaseBasedInstall() {
@@ -131,8 +133,8 @@ final class AppDelegateTests: XCTestCase {
 
         let menu = delegate.makeContextMenu()
 
-        XCTAssertEqual(menu.items[4].title, "Update available: v0.1.4")
-        XCTAssertEqual(menu.items[5].title, "Download update")
+        XCTAssertEqual(menu.items[5].title, "Update available: v0.1.4")
+        XCTAssertEqual(menu.items[6].title, "Download update")
     }
 
     func testContextMenuSupplementalFamilyToggleReflectsEnabledPreference() {
@@ -148,6 +150,38 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertEqual(menu.items[2].state, NSControl.StateValue.on)
     }
 
+    func testContextMenuCreditsToggleReflectsEnabledPreference() {
+        let defaults = Self.makeDefaults()
+        defaults.set(true, forKey: "showCredits")
+        let delegate = makeDelegate(
+            installedApplicationURL: nil,
+            preferences: ToolbarPreferences(defaults: defaults)
+        )
+
+        let menu = delegate.makeContextMenu()
+
+        XCTAssertEqual(menu.items[3].title, "Show credits")
+        XCTAssertEqual(menu.items[3].state, NSControl.StateValue.on)
+    }
+
+    func testContextMenuCreditsToggleFlipsPreference() throws {
+        let defaults = Self.makeDefaults()
+        let preferences = ToolbarPreferences(defaults: defaults)
+        let delegate = makeDelegate(
+            installedApplicationURL: nil,
+            preferences: preferences
+        )
+        let menu = delegate.makeContextMenu()
+        let showCreditsItem = try XCTUnwrap(menu.items.first { $0.title == "Show credits" })
+        let target = try XCTUnwrap(showCreditsItem.target as? NSObject)
+
+        XCTAssertFalse(preferences.isCreditsVisible)
+
+        target.perform(try XCTUnwrap(showCreditsItem.action))
+
+        XCTAssertTrue(preferences.isCreditsVisible)
+    }
+
     func testStatusMenuContentHidesSupplementalSectionsWhenPreferenceIsOff() {
         let defaults = Self.makeDefaults()
         let delegate = makeDelegate(
@@ -159,6 +193,21 @@ final class AppDelegateTests: XCTestCase {
         let view = delegate.makeStatusMenuContentView()
 
         XCTAssertEqual(view.visibleSupplementalFamilyIDs, [])
+        XCTAssertFalse(view.showsCredits)
+    }
+
+    func testStatusMenuContentShowsCreditsWhenPreferenceIsOn() {
+        let defaults = Self.makeDefaults()
+        defaults.set(true, forKey: "showCredits")
+        let delegate = makeDelegate(
+            store: makeSparkStore(),
+            codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: nil),
+            preferences: ToolbarPreferences(defaults: defaults)
+        )
+
+        let view = delegate.makeStatusMenuContentView()
+
+        XCTAssertTrue(view.showsCredits)
     }
 
     func testStatusMenuContentShowsSupplementalSectionsWhenScreenshotOverrideIsEnabled() {

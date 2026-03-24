@@ -169,6 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             store: store,
             screenshotAppearance: screenshotConfiguration?.appearance,
             visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs,
+            showsCredits: showsCredits,
             showsOpenCodexButton: shouldShowOpenCodexButton,
             openCodexAction: makeOpenCodexAction()
         )
@@ -325,6 +326,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(item)
         }
 
+        let showCreditsItem = NSMenuItem(
+            title: "Show credits",
+            action: #selector(toggleCreditsVisibility),
+            keyEquivalent: ""
+        )
+        showCreditsItem.target = self
+        showCreditsItem.state = showsCredits ? .on : .off
+        menu.addItem(showCreditsItem)
+
         menu.addItem(.separator())
 
         if let latestTag = gitUpdateController.menuState.latestTag {
@@ -381,6 +391,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         preferences.toggleSupplementalFamilyVisibility(family)
     }
 
+    @objc private func toggleCreditsVisibility() {
+        preferences.toggleCreditsVisibility()
+    }
+
     @objc private func installUpdate() {
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -427,6 +441,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         return preferences.visibleSupplementalFamilyIDs()
+    }
+
+    private var showsCredits: Bool {
+        preferences.isCreditsVisible
     }
 
     private func makeOpenCodexAction() -> (() -> Void)? {

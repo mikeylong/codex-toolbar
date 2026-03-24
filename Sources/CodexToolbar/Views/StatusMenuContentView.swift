@@ -7,6 +7,7 @@ struct StatusMenuContentView: View {
     let store: RateLimitStore
     let screenshotAppearance: ScreenshotAppearance?
     let visibleSupplementalFamilyIDs: Set<String>
+    let showsCredits: Bool
     let showsOpenCodexButton: Bool
     let openCodexAction: (() -> Void)?
 
@@ -38,6 +39,18 @@ struct StatusMenuContentView: View {
                             showsSectionDivider: index < cardSections.count - 1
                         )
                     }
+                }
+
+                if
+                    showsCredits,
+                    let credit = store.visibleCreditViewData(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs)
+                {
+                    Divider()
+                        .overlay(palette.divider)
+                        .padding(.top, 14)
+                        .padding(.bottom, 12)
+
+                    CreditSummaryView(credit: credit, palette: palette)
                 }
             }
 
@@ -81,6 +94,39 @@ struct StatusMenuContentView: View {
 
     private var palette: StatusMenuPalette {
         StatusMenuPalette.forAppearance(screenshotAppearance, colorScheme: colorScheme)
+    }
+}
+
+private struct CreditSummaryView: View {
+    let credit: RateLimitStore.CreditViewData
+    let palette: StatusMenuPalette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Credit")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(palette.primaryText)
+
+            if let balanceText = credit.balanceText {
+                Text(balanceText)
+                    .font(.body)
+                    .foregroundStyle(palette.primaryText)
+            }
+
+            Text(credit.stateText)
+                .font(.body)
+                .foregroundStyle(palette.secondaryText)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        if let balanceText = credit.balanceText {
+            return "Credit. \(balanceText). \(credit.stateText)."
+        }
+
+        return "Credit. \(credit.stateText)."
     }
 }
 
