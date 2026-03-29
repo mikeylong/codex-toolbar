@@ -75,7 +75,7 @@ final class AppDelegateTests: XCTestCase {
 
         let menu = delegate.makeContextMenu()
 
-        XCTAssertEqual(menu.items.count, 7)
+        XCTAssertEqual(menu.items.count, 11)
         XCTAssertEqual(menu.items[0].title, "Refresh now")
         XCTAssertTrue(
             menu.items[1].title == "Launch at login" ||
@@ -86,9 +86,15 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertEqual(menu.items[3].title, "Show credits")
         XCTAssertEqual(menu.items[3].state, NSControl.StateValue.off)
         XCTAssertTrue(menu.items[4].isSeparatorItem)
-        XCTAssertEqual(menu.items[5].title, "Version \(AppVersion.current)")
-        XCTAssertFalse(menu.items[5].isEnabled)
-        XCTAssertEqual(menu.items[6].title, "Quit")
+        XCTAssertEqual(menu.items[5].title, "Configure OpenAI admin key…")
+        XCTAssertEqual(menu.items[6].title, "Remove OpenAI admin key")
+        XCTAssertFalse(menu.items[6].isEnabled)
+        XCTAssertEqual(menu.items[7].title, "Refresh OpenAI usage")
+        XCTAssertFalse(menu.items[7].isEnabled)
+        XCTAssertTrue(menu.items[8].isSeparatorItem)
+        XCTAssertEqual(menu.items[9].title, "Version \(AppVersion.current)")
+        XCTAssertFalse(menu.items[9].isEnabled)
+        XCTAssertEqual(menu.items[10].title, "Quit")
     }
 
     func testContextMenuShowsUpdateItemsAboveVersionWhenUpdateIsAvailable() {
@@ -106,13 +112,13 @@ final class AppDelegateTests: XCTestCase {
 
         let menu = delegate.makeContextMenu()
 
-        XCTAssertEqual(menu.items.count, 9)
-        XCTAssertEqual(menu.items[5].title, "Update available: v0.1.4")
-        XCTAssertFalse(menu.items[5].isEnabled)
-        XCTAssertEqual(menu.items[6].title, "Install update")
-        XCTAssertTrue(menu.items[6].isEnabled)
-        XCTAssertEqual(menu.items[7].title, "Version \(AppVersion.current)")
-        XCTAssertEqual(menu.items[8].title, "Quit")
+        XCTAssertEqual(menu.items.count, 13)
+        XCTAssertEqual(menu.items[9].title, "Update available: v0.1.4")
+        XCTAssertFalse(menu.items[9].isEnabled)
+        XCTAssertEqual(menu.items[10].title, "Install update")
+        XCTAssertTrue(menu.items[10].isEnabled)
+        XCTAssertEqual(menu.items[11].title, "Version \(AppVersion.current)")
+        XCTAssertEqual(menu.items[12].title, "Quit")
     }
 
     func testContextMenuShowsDownloadUpdateForReleaseBasedInstall() {
@@ -133,8 +139,8 @@ final class AppDelegateTests: XCTestCase {
 
         let menu = delegate.makeContextMenu()
 
-        XCTAssertEqual(menu.items[5].title, "Update available: v0.1.4")
-        XCTAssertEqual(menu.items[6].title, "Download update")
+        XCTAssertEqual(menu.items[9].title, "Update available: v0.1.4")
+        XCTAssertEqual(menu.items[10].title, "Download update")
     }
 
     func testContextMenuSupplementalFamilyToggleReflectsEnabledPreference() {
@@ -182,6 +188,85 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertTrue(preferences.isCreditsVisible)
     }
 
+    func testContextMenuIncludesOpenAIUsageActionsByDefault() {
+        let delegate = makeDelegate(
+            installedApplicationURL: nil,
+            preferences: ToolbarPreferences(defaults: Self.makeDefaults())
+        )
+
+        let menu = delegate.makeContextMenu()
+
+        XCTAssertEqual(menu.items.count, 11)
+        XCTAssertTrue(menu.items[4].isSeparatorItem)
+        XCTAssertEqual(menu.items[5].title, "Configure OpenAI admin key…")
+        XCTAssertEqual(menu.items[6].title, "Remove OpenAI admin key")
+        XCTAssertFalse(menu.items[6].isEnabled)
+        XCTAssertEqual(menu.items[7].title, "Refresh OpenAI usage")
+        XCTAssertFalse(menu.items[7].isEnabled)
+    }
+
+    func testContextMenuOpenAIUsageActionsEnableWhenAdminKeyExists() {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        let delegate = makeDelegate(
+            installedApplicationURL: nil,
+            preferences: preferences,
+            openAIUsageStore: makeOpenAIUsageStore(isEnabled: true, adminKey: "sk-admin-123")
+        )
+
+        let menu = delegate.makeContextMenu()
+
+        XCTAssertTrue(menu.items[6].isEnabled)
+        XCTAssertTrue(menu.items[7].isEnabled)
+    }
+
+    func testConfigureOpenAIAdminKeyActionStoresKeyAndRefreshesUsageStore() async throws {
+        let runtime = FakeAppRuntimeController()
+        runtime.promptedSecret = "sk-admin-123"
+        let client = FakeOpenAIUsageClient()
+        let usageStore = makeOpenAIUsageStore(
+            isEnabled: true,
+            adminKey: nil,
+            client: client
+        )
+        let delegate = makeDelegate(
+            installedApplicationURL: nil,
+            preferences: ToolbarPreferences(defaults: Self.makeDefaults()),
+            openAIUsageStore: usageStore,
+            appRuntime: runtime
+        )
+        let menu = delegate.makeContextMenu()
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Configure OpenAI admin key…" })
+        let target = try XCTUnwrap(item.target as? NSObject)
+
+        target.perform(try XCTUnwrap(item.action))
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(runtime.promptCallCount, 1)
+        XCTAssertTrue(usageStore.hasConfiguredAdminKey)
+        XCTAssertEqual(client.costsCallCount, 1)
+        XCTAssertEqual(client.usageCallCount, 1)
+    }
+
+    func testRemoveOpenAIAdminKeyActionClearsStoredKey() throws {
+        let usageStore = makeOpenAIUsageStore(isEnabled: true, adminKey: "sk-admin-123")
+        let delegate = makeDelegate(
+            installedApplicationURL: nil,
+            preferences: ToolbarPreferences(defaults: Self.makeDefaults()),
+            openAIUsageStore: usageStore
+        )
+        let menu = delegate.makeContextMenu()
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Remove OpenAI admin key" })
+        let target = try XCTUnwrap(item.target as? NSObject)
+
+        target.perform(try XCTUnwrap(item.action))
+
+        XCTAssertFalse(usageStore.hasConfiguredAdminKey)
+        XCTAssertEqual(
+            usageStore.viewData?.statusMessage,
+            "Configure an OpenAI admin key to view organization API usage."
+        )
+    }
+
     func testStatusMenuContentHidesSupplementalSectionsWhenPreferenceIsOff() {
         let defaults = Self.makeDefaults()
         let delegate = makeDelegate(
@@ -208,6 +293,22 @@ final class AppDelegateTests: XCTestCase {
         let view = delegate.makeStatusMenuContentView()
 
         XCTAssertTrue(view.showsCredits)
+    }
+
+    func testStatusMenuContentIncludesEnabledOpenAIUsageStoreByDefault() {
+        let delegate = makeDelegate(
+            store: makeSparkStore(),
+            codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: nil),
+            preferences: ToolbarPreferences(defaults: Self.makeDefaults())
+        )
+
+        let view = delegate.makeStatusMenuContentView()
+
+        XCTAssertTrue(view.openAIUsageStore.isEnabled)
+        XCTAssertEqual(
+            view.openAIUsageStore.viewData?.statusMessage,
+            "Configure an OpenAI admin key to view organization API usage."
+        )
     }
 
     func testStatusMenuContentShowsSupplementalSectionsWhenScreenshotOverrideIsEnabled() {
@@ -406,10 +507,12 @@ final class AppDelegateTests: XCTestCase {
         installedApplicationURL: URL?,
         preferences: ToolbarPreferences,
         screenshotConfiguration: ScreenshotLaunchConfiguration? = nil,
+        openAIUsageStore: OpenAIUsageStore? = nil,
         appRuntime: any AppRuntimeControlling = FakeAppRuntimeController()
     ) -> AppDelegate {
         makeDelegate(
             store: makeNormalStore(),
+            openAIUsageStore: openAIUsageStore ?? makeOpenAIUsageStore(isEnabled: true),
             codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: installedApplicationURL),
             preferences: preferences,
             screenshotConfiguration: screenshotConfiguration,
@@ -419,6 +522,7 @@ final class AppDelegateTests: XCTestCase {
 
     private func makeDelegate(
         store: RateLimitStore,
+        openAIUsageStore: OpenAIUsageStore? = nil,
         codexDesktopAppProvider: any CodexDesktopAppProviding,
         preferences: ToolbarPreferences,
         screenshotConfiguration: ScreenshotLaunchConfiguration? = nil,
@@ -427,6 +531,7 @@ final class AppDelegateTests: XCTestCase {
     ) -> AppDelegate {
         AppDelegate(
             store: store,
+            openAIUsageStore: openAIUsageStore ?? makeOpenAIUsageStore(isEnabled: true),
             loginItemController: LoginItemController(service: FakeLoginItemService()),
             gitUpdateController: gitUpdateController ?? makeGitUpdateController(preferences: preferences),
             codexDesktopAppProvider: codexDesktopAppProvider,
@@ -462,6 +567,19 @@ final class AppDelegateTests: XCTestCase {
         RateLimitStore.makeShared(
             arguments: ["CodexToolbar", "--screenshot-scenario", "normal"],
             environment: [:]
+        )
+    }
+
+    private func makeOpenAIUsageStore(
+        isEnabled: Bool,
+        adminKey: String? = nil,
+        client: FakeOpenAIUsageClient = FakeOpenAIUsageClient()
+    ) -> OpenAIUsageStore {
+        OpenAIUsageStore(
+            client: client,
+            adminKeyStore: FakeOpenAIAdminKeyStore(initialKey: adminKey),
+            nowProvider: { Date(timeIntervalSince1970: 1_711_929_600) },
+            isEnabled: isEnabled
         )
     }
 
@@ -531,6 +649,61 @@ private final class FakeCodexDesktopAppProvider: CodexDesktopAppProviding {
     }
 }
 
+private final class FakeOpenAIAdminKeyStore: @unchecked Sendable, OpenAIAdminKeyStore {
+    private(set) var storedKey: String?
+
+    init(initialKey: String?) {
+        storedKey = initialKey
+    }
+
+    func readAdminKey() throws -> String? {
+        storedKey
+    }
+
+    func writeAdminKey(_ key: String) throws {
+        storedKey = key
+    }
+
+    func removeAdminKey() throws {
+        storedKey = nil
+    }
+}
+
+private final class FakeOpenAIUsageClient: @unchecked Sendable, OpenAIUsageClient {
+    var costBuckets: [OpenAICostBucket] = []
+    var usageBuckets: [OpenAICompletionsUsageBucket] = []
+    var costsError: Error?
+    var usageError: Error?
+    private(set) var costsCallCount = 0
+    private(set) var usageCallCount = 0
+
+    func readCosts(
+        adminKey: String,
+        startTime: Int64,
+        endTime: Int64,
+        limit: Int
+    ) async throws -> [OpenAICostBucket] {
+        costsCallCount += 1
+        if let costsError {
+            throw costsError
+        }
+        return costBuckets
+    }
+
+    func readCompletionsUsage(
+        adminKey: String,
+        startTime: Int64,
+        endTime: Int64,
+        limit: Int
+    ) async throws -> [OpenAICompletionsUsageBucket] {
+        usageCallCount += 1
+        if let usageError {
+            throw usageError
+        }
+        return usageBuckets
+    }
+}
+
 @MainActor
 private struct FakeLoginItemService: LoginItemService {
     var status: LoginItemRegistrationStatus { .notRegistered }
@@ -595,6 +768,8 @@ private final class FakeAppRuntimeController: AppRuntimeControlling {
     private(set) var terminateCallCount = 0
     private(set) var notifications: [Notification] = []
     private(set) var openedURLs: [URL] = []
+    var promptedSecret: String?
+    private(set) var promptCallCount = 0
 
     func terminate() {
         terminateCallCount += 1
@@ -606,5 +781,10 @@ private final class FakeAppRuntimeController: AppRuntimeControlling {
 
     func openURL(_ url: URL) throws {
         openedURLs.append(url)
+    }
+
+    func promptForSecret(title: String, message: String) -> String? {
+        promptCallCount += 1
+        return promptedSecret
     }
 }

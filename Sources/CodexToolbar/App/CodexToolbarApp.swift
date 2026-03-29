@@ -8,6 +8,7 @@ protocol AppRuntimeControlling {
     func terminate()
     func postNotification(title: String, body: String)
     func openURL(_ url: URL) throws
+    func promptForSecret(title: String, message: String) -> String?
 }
 
 @MainActor
@@ -30,6 +31,21 @@ private struct LiveAppRuntimeController: AppRuntimeControlling {
         guard NSWorkspace.shared.open(url) else {
             throw AppRuntimeError.openURLFailed(url)
         }
+    }
+
+    func promptForSecret(title: String, message: String) -> String? {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+
+        let inputField = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        inputField.placeholderString = "OPENAI_ADMIN_KEY"
+        alert.accessoryView = inputField
+
+        return alert.runModal() == .alertFirstButtonReturn ? inputField.stringValue : nil
     }
 }
 
@@ -58,6 +74,7 @@ struct CodexToolbarApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let store: RateLimitStore
+    private let openAIUsageStore: OpenAIUsageStore
     private let loginItemController: LoginItemController
     private let gitUpdateController: GitUpdateController
     private let codexDesktopAppProvider: any CodexDesktopAppProviding
@@ -73,10 +90,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     override init() {
         store = .shared
+        preferences = .shared
+        openAIUsageStore = OpenAIUsageStore(isEnabled: true)
         loginItemController = .shared
         gitUpdateController = .shared
         codexDesktopAppProvider = CodexDesktopAppController()
-        preferences = .shared
         maintenanceLaunchConfiguration = MaintenanceLaunchConfiguration.current()
         screenshotConfiguration = ScreenshotLaunchConfiguration.current()
         startupDiagnosticsConfiguration = StartupDiagnosticsConfiguration.current()
@@ -86,6 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     init(
         store: RateLimitStore,
+        openAIUsageStore: OpenAIUsageStore = OpenAIUsageStore(isEnabled: true),
         loginItemController: LoginItemController,
         gitUpdateController: GitUpdateController,
         codexDesktopAppProvider: any CodexDesktopAppProviding,
@@ -96,6 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appRuntime: any AppRuntimeControlling = LiveAppRuntimeController()
     ) {
         self.store = store
+        self.openAIUsageStore = openAIUsageStore
         self.loginItemController = loginItemController
         self.gitUpdateController = gitUpdateController
         self.codexDesktopAppProvider = codexDesktopAppProvider
@@ -121,6 +141,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateStatusItem()
         Task {
             await store.start()
+        }
+        Task {
+            await openAIUsageStore.start()
         }
         gitUpdateController.start()
         maybeReportStartupDiagnostics()
@@ -159,7 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func configurePopover() {
         let popover = NSPopover()
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 352, height: 300)
+        popover.contentSize = popoverContentSize
         popover.contentViewController = NSHostingController(rootView: makeStatusMenuContentView())
         self.popover = popover
     }
@@ -167,6 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func makeStatusMenuContentView() -> StatusMenuContentView {
         StatusMenuContentView(
             store: store,
+            openAIUsageStore: openAIUsageStore,
             screenshotAppearance: screenshotConfiguration?.appearance,
             visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs,
             showsCredits: showsCredits,
@@ -198,6 +222,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateStatusItem() {
         guard let button = statusItem?.button else { return }
         updateStatusItemButton(button)
+    }
+
+    private var popoverContentSize: NSSize {
+        NSSize(width: 352, height: openAIUsageStore.isEnabled ? 420 : 300)
     }
 
     func updateStatusItemButton(_ button: NSStatusBarButton) {
@@ -285,11 +313,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showPopover(relativeTo button: NSStatusBarButton) {
         guard let popover else { return }
+        popover.contentSize = popoverContentSize
         if let controller = popover.contentViewController as? NSHostingController<StatusMenuContentView> {
             controller.rootView = makeStatusMenuContentView()
         }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
+        Task {
+            await openAIUsageStore.refreshIfNeeded(maxAge: 15 * 60)
+        }
     }
 
     private func showContextMenu(from button: NSStatusBarButton) {
@@ -335,6 +367,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showCreditsItem.state = showsCredits ? .on : .off
         menu.addItem(showCreditsItem)
 
+        if openAIUsageStore.isEnabled {
+            menu.addItem(.separator())
+
+            let configureOpenAIKeyItem = NSMenuItem(
+                title: "Configure OpenAI admin key…",
+                action: #selector(configureOpenAIAdminKey),
+                keyEquivalent: ""
+            )
+            configureOpenAIKeyItem.target = self
+            menu.addItem(configureOpenAIKeyItem)
+
+            let removeOpenAIKeyItem = NSMenuItem(
+                title: "Remove OpenAI admin key",
+                action: #selector(removeOpenAIAdminKey),
+                keyEquivalent: ""
+            )
+            removeOpenAIKeyItem.target = self
+            removeOpenAIKeyItem.isEnabled = openAIUsageStore.hasConfiguredAdminKey
+            menu.addItem(removeOpenAIKeyItem)
+
+            let refreshOpenAIUsageItem = NSMenuItem(
+                title: "Refresh OpenAI usage",
+                action: #selector(refreshOpenAIUsage),
+                keyEquivalent: ""
+            )
+            refreshOpenAIUsageItem.target = self
+            refreshOpenAIUsageItem.isEnabled = openAIUsageStore.hasConfiguredAdminKey
+            menu.addItem(refreshOpenAIUsageItem)
+        }
+
         menu.addItem(.separator())
 
         if let latestTag = gitUpdateController.menuState.latestTag {
@@ -371,8 +433,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func refreshNow() {
         Task {
             async let storeRefresh: Void = store.refreshNow()
+            async let openAIUsageRefresh: Void = openAIUsageStore.refreshNow()
             async let gitUpdateRefresh: Void = gitUpdateController.refreshNow()
-            _ = await (storeRefresh, gitUpdateRefresh)
+            _ = await (storeRefresh, openAIUsageRefresh, gitUpdateRefresh)
         }
     }
 
@@ -393,6 +456,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func toggleCreditsVisibility() {
         preferences.toggleCreditsVisibility()
+    }
+
+    @objc private func configureOpenAIAdminKey() {
+        guard let adminKey = appRuntime.promptForSecret(
+            title: "Configure OpenAI admin key",
+            message: "Paste an OPENAI_ADMIN_KEY to fetch organization-level OpenAI API usage."
+        )?.trimmingCharacters(in: .whitespacesAndNewlines), !adminKey.isEmpty else {
+            return
+        }
+
+        do {
+            try openAIUsageStore.saveAdminKey(adminKey)
+            Task {
+                await openAIUsageStore.refreshNow()
+            }
+        } catch {
+            appRuntime.postNotification(
+                title: "OpenAI usage setup failed",
+                body: error.localizedDescription
+            )
+        }
+    }
+
+    @objc private func removeOpenAIAdminKey() {
+        do {
+            try openAIUsageStore.removeAdminKey()
+        } catch {
+            appRuntime.postNotification(
+                title: "OpenAI usage setup failed",
+                body: error.localizedDescription
+            )
+        }
+    }
+
+    @objc private func refreshOpenAIUsage() {
+        Task {
+            await openAIUsageStore.refreshNow()
+        }
     }
 
     @objc private func installUpdate() {
@@ -823,7 +924,7 @@ enum AppVersion {
             return version
         }
 
-        return "0.1.8"
+        return "0.1.10"
     }()
 
     private static func developmentVersionFromSourceInfoPlist() -> String? {

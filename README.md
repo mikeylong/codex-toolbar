@@ -6,6 +6,7 @@ A small macOS menu bar app that shows your Codex rate-limit remaining values.
 
 - Shows a compact progress bar for the most constrained core Codex window in the menu bar, including multi-week windows.
 - Shows a popover with used/remaining percentages, progress bars, and reset timing.
+- Optionally shows organization-level OpenAI API usage in the popover when you configure an `OPENAI_ADMIN_KEY`.
 - Adds an `Open Codex` button in the popover when the Codex desktop app is installed.
 - Refreshes automatically on system clock minute boundaries.
 - Supports manual refresh from the menu bar item's right-click menu.
@@ -48,8 +49,9 @@ That quits `CodexToolbar` if it is running, removes its launch-at-login registra
 ## Use
 
 - Left-click the menu bar item to see the current rate-limit status panel.
+- Use the OpenAI API usage section in the popover after configuring an `OPENAI_ADMIN_KEY` from the right-click menu.
 - Use the popover's `Open Codex` button to jump into the Codex desktop app when it is installed locally.
-- Right-click the menu bar item for `Refresh now`, `Launch at login`, and `Quit`.
+- Right-click the menu bar item for `Refresh now`, `Launch at login`, `Configure OpenAI admin key…`, `Refresh OpenAI usage`, and `Quit`.
 - Use `Launch at login` after running the installed app from `~/Applications`.
 
 ## Screenshots
@@ -80,7 +82,7 @@ GitHub Actions runs `swift test` plus the installed-app smoke test on macOS for 
 Tagged releases also build and upload a signed DMG to GitHub Releases.
 
 Release rule:
-- Ship annotated git tags that match `Resources/Info.plist` `CFBundleShortVersionString`, for example `v0.1.8`.
+- Ship annotated git tags that match `Resources/Info.plist` `CFBundleShortVersionString`, for example `v0.1.10`.
 - GitHub release DMGs must be signed with a real `Developer ID Application` identity and stapled after notarization. An ad hoc DMG will trigger the macOS "Apple could not verify it is free of malware" warning when downloaded from GitHub.
 - The `Release DMG` workflow expects these repository secrets before a tag is published: `MACOS_DEVELOPER_ID_APPLICATION_P12`, `MACOS_DEVELOPER_ID_APPLICATION_P12_PASSWORD`, `MACOS_BUILD_KEYCHAIN_PASSWORD`, `MACOS_DEVELOPER_ID_APPLICATION_IDENTITY`, `APPLE_API_KEY_P8`, and `APPLE_API_KEY_ID`.
 - `APPLE_API_ISSUER_ID` is optional. Set it for a team App Store Connect API key; leave it unset for an individual key.

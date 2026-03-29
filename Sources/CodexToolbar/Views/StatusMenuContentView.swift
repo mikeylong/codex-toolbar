@@ -5,6 +5,7 @@ struct StatusMenuContentView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let store: RateLimitStore
+    let openAIUsageStore: OpenAIUsageStore
     let screenshotAppearance: ScreenshotAppearance?
     let visibleSupplementalFamilyIDs: Set<String>
     let showsCredits: Bool
@@ -14,6 +15,8 @@ struct StatusMenuContentView: View {
     var body: some View {
         let visibleCards = store.visibleCards(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs)
         let cardSections = store.visibleCardSections(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs)
+        let credit = showsCredits ? store.visibleCreditViewData(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs) : nil
+        let openAIUsageViewData = openAIUsageStore.viewData
 
         VStack(alignment: .leading, spacing: 14) {
             Text("Codex rate limit status")
@@ -40,18 +43,24 @@ struct StatusMenuContentView: View {
                         )
                     }
                 }
+            }
 
-                if
-                    showsCredits,
-                    let credit = store.visibleCreditViewData(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs)
-                {
-                    Divider()
-                        .overlay(palette.divider)
-                        .padding(.top, 14)
-                        .padding(.bottom, 12)
+            if let credit {
+                Divider()
+                    .overlay(palette.divider)
+                    .padding(.top, 14)
+                    .padding(.bottom, 12)
 
-                    CreditSummaryView(credit: credit, palette: palette)
-                }
+                CreditSummaryView(credit: credit, palette: palette)
+            }
+
+            if let openAIUsageViewData {
+                Divider()
+                    .overlay(palette.divider)
+                    .padding(.top, 14)
+                    .padding(.bottom, 12)
+
+                OpenAIUsageSummaryView(viewData: openAIUsageViewData, palette: palette)
             }
 
             Divider()
@@ -127,6 +136,73 @@ private struct CreditSummaryView: View {
         }
 
         return "Credit. \(credit.stateText)."
+    }
+}
+
+private struct OpenAIUsageSummaryView: View {
+    let viewData: OpenAIUsageStore.ViewData
+    let palette: StatusMenuPalette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("OpenAI API usage")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(palette.primaryText)
+
+            if let statusMessage = viewData.statusMessage {
+                Text(statusMessage)
+                    .font(.body)
+                    .foregroundStyle(palette.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            ForEach(Array(viewData.periodSummaries.enumerated()), id: \.offset) { index, summary in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(summary.title)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(palette.primaryText)
+
+                    if let primaryText = summary.primaryText {
+                        Text(primaryText)
+                            .font(.body)
+                            .foregroundStyle(palette.primaryText)
+                    }
+
+                    if let secondaryText = summary.secondaryText {
+                        Text(secondaryText)
+                            .font(.body)
+                            .foregroundStyle(palette.secondaryText)
+                    }
+                }
+
+                if index < viewData.periodSummaries.count - 1 {
+                    Divider()
+                        .overlay(palette.divider)
+                        .padding(.vertical, 6)
+                }
+            }
+
+            if let costsStatusMessage = viewData.costsStatusMessage {
+                Text(costsStatusMessage)
+                    .font(.body)
+                    .foregroundStyle(palette.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let usageStatusMessage = viewData.usageStatusMessage {
+                Text(usageStatusMessage)
+                    .font(.body)
+                    .foregroundStyle(palette.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let footerText = viewData.footerText {
+                Text(footerText)
+                    .font(.body)
+                    .foregroundStyle(palette.secondaryText)
+                    .padding(.top, 2)
+            }
+        }
     }
 }
 
