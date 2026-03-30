@@ -9,6 +9,7 @@ struct StatusMenuContentView: View {
     let screenshotAppearance: ScreenshotAppearance?
     let visibleSupplementalFamilyIDs: Set<String>
     let showsCredits: Bool
+    let showsOpenAIUsage: Bool
     let showsOpenCodexButton: Bool
     let openCodexAction: (() -> Void)?
 
@@ -16,7 +17,7 @@ struct StatusMenuContentView: View {
         let visibleCards = store.visibleCards(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs)
         let cardSections = store.visibleCardSections(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs)
         let credit = showsCredits ? store.visibleCreditViewData(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs) : nil
-        let openAIUsageViewData = openAIUsageStore.viewData
+        let openAIUsageViewData = showsOpenAIUsage ? openAIUsageStore.viewData : nil
 
         VStack(alignment: .leading, spacing: 14) {
             Text("Codex rate limit status")

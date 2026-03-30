@@ -85,11 +85,11 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertEqual(menu.items[2].state, NSControl.StateValue.off)
         XCTAssertEqual(menu.items[3].title, "Show credits")
         XCTAssertEqual(menu.items[3].state, NSControl.StateValue.off)
-        XCTAssertTrue(menu.items[4].isSeparatorItem)
-        XCTAssertEqual(menu.items[5].title, "Configure OpenAI admin key…")
-        XCTAssertEqual(menu.items[6].title, "Remove OpenAI admin key")
-        XCTAssertFalse(menu.items[6].isEnabled)
-        XCTAssertEqual(menu.items[7].title, "Refresh OpenAI usage")
+        XCTAssertEqual(menu.items[4].title, "Show API usage")
+        XCTAssertEqual(menu.items[4].state, NSControl.StateValue.off)
+        XCTAssertTrue(menu.items[5].isSeparatorItem)
+        XCTAssertEqual(menu.items[6].title, "Configure OpenAI admin key…")
+        XCTAssertEqual(menu.items[7].title, "Remove OpenAI admin key")
         XCTAssertFalse(menu.items[7].isEnabled)
         XCTAssertTrue(menu.items[8].isSeparatorItem)
         XCTAssertEqual(menu.items[9].title, "Version \(AppVersion.current)")
@@ -170,6 +170,20 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertEqual(menu.items[3].state, NSControl.StateValue.on)
     }
 
+    func testContextMenuOpenAIUsageToggleReflectsEnabledPreference() {
+        let defaults = Self.makeDefaults()
+        defaults.set(true, forKey: "showOpenAIUsage")
+        let delegate = makeDelegate(
+            installedApplicationURL: nil,
+            preferences: ToolbarPreferences(defaults: defaults)
+        )
+
+        let menu = delegate.makeContextMenu()
+
+        XCTAssertEqual(menu.items[4].title, "Show API usage")
+        XCTAssertEqual(menu.items[4].state, NSControl.StateValue.on)
+    }
+
     func testContextMenuCreditsToggleFlipsPreference() throws {
         let defaults = Self.makeDefaults()
         let preferences = ToolbarPreferences(defaults: defaults)
@@ -188,6 +202,40 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertTrue(preferences.isCreditsVisible)
     }
 
+    func testContextMenuOpenAIUsageToggleFlipsPreferenceAndStartsStore() async throws {
+        let defaults = Self.makeDefaults()
+        let preferences = ToolbarPreferences(defaults: defaults)
+        let client = FakeOpenAIUsageClient()
+        client.costBuckets = [
+            try XCTUnwrap(makeOpenAICostBucket(amount: "1.50"))
+        ]
+        client.usageBuckets = [
+            try XCTUnwrap(makeOpenAIUsageBucket(requests: 4, input: 80, output: 20))
+        ]
+        let usageStore = makeOpenAIUsageStore(
+            isEnabled: true,
+            adminKey: "sk-admin-123",
+            client: client
+        )
+        let delegate = makeDelegate(
+            installedApplicationURL: nil,
+            preferences: preferences,
+            openAIUsageStore: usageStore
+        )
+        let menu = delegate.makeContextMenu()
+        let showOpenAIUsageItem = try XCTUnwrap(menu.items.first { $0.title == "Show API usage" })
+        let target = try XCTUnwrap(showOpenAIUsageItem.target as? NSObject)
+
+        XCTAssertFalse(preferences.isOpenAIUsageVisible)
+
+        target.perform(try XCTUnwrap(showOpenAIUsageItem.action))
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(preferences.isOpenAIUsageVisible)
+        XCTAssertEqual(client.costsCallCount, 1)
+        XCTAssertEqual(client.usageCallCount, 1)
+    }
+
     func testContextMenuIncludesOpenAIUsageActionsByDefault() {
         let delegate = makeDelegate(
             installedApplicationURL: nil,
@@ -197,12 +245,11 @@ final class AppDelegateTests: XCTestCase {
         let menu = delegate.makeContextMenu()
 
         XCTAssertEqual(menu.items.count, 11)
-        XCTAssertTrue(menu.items[4].isSeparatorItem)
-        XCTAssertEqual(menu.items[5].title, "Configure OpenAI admin key…")
-        XCTAssertEqual(menu.items[6].title, "Remove OpenAI admin key")
-        XCTAssertFalse(menu.items[6].isEnabled)
-        XCTAssertEqual(menu.items[7].title, "Refresh OpenAI usage")
+        XCTAssertTrue(menu.items[5].isSeparatorItem)
+        XCTAssertEqual(menu.items[6].title, "Configure OpenAI admin key…")
+        XCTAssertEqual(menu.items[7].title, "Remove OpenAI admin key")
         XCTAssertFalse(menu.items[7].isEnabled)
+        XCTAssertTrue(menu.items[8].isSeparatorItem)
     }
 
     func testContextMenuOpenAIUsageActionsEnableWhenAdminKeyExists() {
@@ -215,8 +262,107 @@ final class AppDelegateTests: XCTestCase {
 
         let menu = delegate.makeContextMenu()
 
-        XCTAssertTrue(menu.items[6].isEnabled)
         XCTAssertTrue(menu.items[7].isEnabled)
+    }
+
+    func testRefreshNowSkipsOpenAIUsageWhenAPIUsageIsHidden() async throws {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        let rateLimitClient = FakeStatusItemRateLimitClient()
+        let rateLimitStore = RateLimitStore(
+            client: rateLimitClient,
+            refreshDelayNanosecondsProvider: { 1_000_000_000 },
+            liveUpdatesEnabled: false
+        )
+        let openAIClient = FakeOpenAIUsageClient()
+        openAIClient.costBuckets = [
+            try XCTUnwrap(makeOpenAICostBucket(amount: "1.50"))
+        ]
+        openAIClient.usageBuckets = [
+            try XCTUnwrap(makeOpenAIUsageBucket(requests: 4, input: 80, output: 20))
+        ]
+        let openAIUsageStore = makeOpenAIUsageStore(
+            isEnabled: true,
+            adminKey: "sk-admin-123",
+            client: openAIClient
+        )
+        let gitUpdateTooling = CountingGitUpdateTooling(latestReleaseTag: "v0.1.10")
+        let gitUpdateController = makeGitUpdateController(
+            preferences: preferences,
+            tooling: gitUpdateTooling,
+            currentVersionProvider: { "0.1.9" }
+        )
+        let delegate = makeDelegate(
+            store: rateLimitStore,
+            openAIUsageStore: openAIUsageStore,
+            codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: nil),
+            preferences: preferences,
+            gitUpdateController: gitUpdateController
+        )
+        let menu = delegate.makeContextMenu()
+        let refreshItem = try XCTUnwrap(menu.items.first { $0.title == "Refresh now" })
+        let target = try XCTUnwrap(refreshItem.target as? NSObject)
+
+        target.perform(try XCTUnwrap(refreshItem.action))
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(rateLimitClient.loadSnapshotCallCount, 1)
+        XCTAssertEqual(openAIClient.costsCallCount, 0)
+        XCTAssertEqual(openAIClient.usageCallCount, 0)
+        XCTAssertEqual(gitUpdateController.menuState, .updateAvailable(
+            "v0.1.10",
+            .downloadRelease(URL(string: "https://github.com/mikeylong/codex-toolbar/releases/latest")!)
+        ))
+    }
+
+    func testRefreshNowRefreshesAllSubsystemsTogetherWhenAPIUsageIsVisible() async throws {
+        let defaults = Self.makeDefaults()
+        defaults.set(true, forKey: "showOpenAIUsage")
+        let preferences = ToolbarPreferences(defaults: defaults)
+        let rateLimitClient = FakeStatusItemRateLimitClient()
+        let rateLimitStore = RateLimitStore(
+            client: rateLimitClient,
+            refreshDelayNanosecondsProvider: { 1_000_000_000 },
+            liveUpdatesEnabled: false
+        )
+        let openAIClient = FakeOpenAIUsageClient()
+        openAIClient.costBuckets = [
+            try XCTUnwrap(makeOpenAICostBucket(amount: "1.50"))
+        ]
+        openAIClient.usageBuckets = [
+            try XCTUnwrap(makeOpenAIUsageBucket(requests: 4, input: 80, output: 20))
+        ]
+        let openAIUsageStore = makeOpenAIUsageStore(
+            isEnabled: true,
+            adminKey: "sk-admin-123",
+            client: openAIClient
+        )
+        let gitUpdateTooling = CountingGitUpdateTooling(latestReleaseTag: "v0.1.10")
+        let gitUpdateController = makeGitUpdateController(
+            preferences: preferences,
+            tooling: gitUpdateTooling,
+            currentVersionProvider: { "0.1.9" }
+        )
+        let delegate = makeDelegate(
+            store: rateLimitStore,
+            openAIUsageStore: openAIUsageStore,
+            codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: nil),
+            preferences: preferences,
+            gitUpdateController: gitUpdateController
+        )
+        let menu = delegate.makeContextMenu()
+        let refreshItem = try XCTUnwrap(menu.items.first { $0.title == "Refresh now" })
+        let target = try XCTUnwrap(refreshItem.target as? NSObject)
+
+        target.perform(try XCTUnwrap(refreshItem.action))
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(rateLimitClient.loadSnapshotCallCount, 1)
+        XCTAssertEqual(openAIClient.costsCallCount, 1)
+        XCTAssertEqual(openAIClient.usageCallCount, 1)
+        XCTAssertEqual(gitUpdateController.menuState, .updateAvailable(
+            "v0.1.10",
+            .downloadRelease(URL(string: "https://github.com/mikeylong/codex-toolbar/releases/latest")!)
+        ))
     }
 
     func testConfigureOpenAIAdminKeyActionStoresKeyAndRefreshesUsageStore() async throws {
@@ -243,8 +389,8 @@ final class AppDelegateTests: XCTestCase {
 
         XCTAssertEqual(runtime.promptCallCount, 1)
         XCTAssertTrue(usageStore.hasConfiguredAdminKey)
-        XCTAssertEqual(client.costsCallCount, 1)
-        XCTAssertEqual(client.usageCallCount, 1)
+        XCTAssertEqual(client.costsCallCount, 0)
+        XCTAssertEqual(client.usageCallCount, 0)
     }
 
     func testRemoveOpenAIAdminKeyActionClearsStoredKey() throws {
@@ -279,6 +425,7 @@ final class AppDelegateTests: XCTestCase {
 
         XCTAssertEqual(view.visibleSupplementalFamilyIDs, [])
         XCTAssertFalse(view.showsCredits)
+        XCTAssertFalse(view.showsOpenAIUsage)
     }
 
     func testStatusMenuContentShowsCreditsWhenPreferenceIsOn() {
@@ -295,7 +442,7 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertTrue(view.showsCredits)
     }
 
-    func testStatusMenuContentIncludesEnabledOpenAIUsageStoreByDefault() {
+    func testStatusMenuContentHidesOpenAIUsageByDefault() {
         let delegate = makeDelegate(
             store: makeSparkStore(),
             codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: nil),
@@ -305,10 +452,21 @@ final class AppDelegateTests: XCTestCase {
         let view = delegate.makeStatusMenuContentView()
 
         XCTAssertTrue(view.openAIUsageStore.isEnabled)
-        XCTAssertEqual(
-            view.openAIUsageStore.viewData?.statusMessage,
-            "Configure an OpenAI admin key to view organization API usage."
+        XCTAssertFalse(view.showsOpenAIUsage)
+    }
+
+    func testStatusMenuContentShowsOpenAIUsageWhenPreferenceIsOn() {
+        let defaults = Self.makeDefaults()
+        defaults.set(true, forKey: "showOpenAIUsage")
+        let delegate = makeDelegate(
+            store: makeSparkStore(),
+            codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: nil),
+            preferences: ToolbarPreferences(defaults: defaults)
         )
+
+        let view = delegate.makeStatusMenuContentView()
+
+        XCTAssertTrue(view.showsOpenAIUsage)
     }
 
     func testStatusMenuContentShowsSupplementalSectionsWhenScreenshotOverrideIsEnabled() {
@@ -333,6 +491,26 @@ final class AppDelegateTests: XCTestCase {
         let view = delegate.makeStatusMenuContentView()
 
         XCTAssertEqual(view.visibleSupplementalFamilyIDs, ["codex_bengalfox"])
+    }
+
+    func testPopoverContentSizeExpandsWhenOpenAIUsageIsVisible() {
+        let defaults = Self.makeDefaults()
+        defaults.set(true, forKey: "showOpenAIUsage")
+        let delegate = makeDelegate(
+            installedApplicationURL: nil,
+            preferences: ToolbarPreferences(defaults: defaults)
+        )
+
+        XCTAssertEqual(delegate.popoverContentSize, NSSize(width: 352, height: 420))
+    }
+
+    func testPopoverContentSizeStaysCompactWhenOpenAIUsageIsHidden() {
+        let delegate = makeDelegate(
+            installedApplicationURL: nil,
+            preferences: ToolbarPreferences(defaults: Self.makeDefaults())
+        )
+
+        XCTAssertEqual(delegate.popoverContentSize, NSSize(width: 352, height: 300))
     }
 
     func testReadyStatusItemImageKeepsGlyphTintStableWhileBarColorChanges() throws {
@@ -545,11 +723,14 @@ final class AppDelegateTests: XCTestCase {
 
     private func makeGitUpdateController(
         preferences: ToolbarPreferences,
+        tooling: any GitUpdateTooling = FakeGitUpdateTooling(),
+        currentVersionProvider: @escaping @Sendable () -> String = { AppVersion.current },
         state: GitUpdateState = .upToDate
     ) -> GitUpdateController {
         let controller = GitUpdateController(
-            service: GitUpdateService(tooling: FakeGitUpdateTooling()),
+            service: GitUpdateService(tooling: tooling),
             preferences: preferences,
+            currentVersionProvider: currentVersionProvider,
             refreshDelayNanosecondsProvider: { 1_000_000_000 }
         )
         controller.state = state
@@ -588,6 +769,53 @@ final class AppDelegateTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
+    }
+
+    private func makeOpenAICostBucket(amount: String) throws -> OpenAICostBucket {
+        try JSONDecoder().decode(
+            OpenAICostBucket.self,
+            from: Data(
+                """
+                {
+                  "object": "bucket",
+                  "start_time": 1711929600,
+                  "end_time": 1712016000,
+                  "results": [
+                    {
+                      "object": "organization.costs.result",
+                      "amount": {
+                        "value": \(amount),
+                        "currency": "USD"
+                      }
+                    }
+                  ]
+                }
+                """.utf8
+            )
+        )
+    }
+
+    private func makeOpenAIUsageBucket(requests: Int, input: Int, output: Int) throws -> OpenAICompletionsUsageBucket {
+        try JSONDecoder().decode(
+            OpenAICompletionsUsageBucket.self,
+            from: Data(
+                """
+                {
+                  "object": "bucket",
+                  "start_time": 1711929600,
+                  "end_time": 1712016000,
+                  "results": [
+                    {
+                      "object": "organization.usage.completions.result",
+                      "input_tokens": \(input),
+                      "output_tokens": \(output),
+                      "num_model_requests": \(requests)
+                    }
+                  ]
+                }
+                """.utf8
+            )
+        )
     }
 
     private func pixelData(for image: NSImage, in region: NSRect) throws -> Data {
@@ -713,6 +941,8 @@ private struct FakeLoginItemService: LoginItemService {
 }
 
 private final class FakeStatusItemRateLimitClient: @unchecked Sendable, CodexRateLimitClient {
+    private(set) var loadSnapshotCallCount = 0
+
     func events() -> AsyncStream<CodexAppServerEvent> {
         AsyncStream { continuation in
             continuation.finish()
@@ -723,11 +953,11 @@ private final class FakeStatusItemRateLimitClient: @unchecked Sendable, CodexRat
     func disconnect() async {}
 
     func readAccount(refreshToken: Bool) async throws -> GetAccountResponse {
-        fatalError("Unused in AppDelegateTests")
+        GetAccountResponse(account: .apiKey, requiresOpenaiAuth: false)
     }
 
     func readRateLimits() async throws -> GetAccountRateLimitsResponse {
-        fatalError("Unused in AppDelegateTests")
+        Self.sampleRateLimits
     }
 
     func readLoginStatus() async throws -> CodexLoginStatus {
@@ -735,8 +965,25 @@ private final class FakeStatusItemRateLimitClient: @unchecked Sendable, CodexRat
     }
 
     func loadSnapshot(refreshToken: Bool) async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
-        fatalError("Unused in AppDelegateTests")
+        loadSnapshotCallCount += 1
+        return (try await readAccount(refreshToken: refreshToken), try await readRateLimits())
     }
+
+    private static let sampleRateLimits = GetAccountRateLimitsResponse(
+        rateLimits: CodexRateLimitsSnapshot(
+            credits: nil,
+            limitId: "codex",
+            limitName: "Codex",
+            planType: .plus,
+            primary: CodexRateLimitWindow(
+                resetsAt: 1_711_998_000,
+                usedPercent: 25,
+                windowDurationMins: 10_080
+            ),
+            secondary: nil
+        ),
+        rateLimitsByLimitId: nil
+    )
 }
 
 private struct FakeGitUpdateTooling: GitUpdateTooling {
@@ -755,6 +1002,36 @@ private struct FakeGitUpdateTooling: GitUpdateTooling {
         timeoutNanoseconds: UInt64
     ) async throws -> String? {
         nil
+    }
+}
+
+private final class CountingGitUpdateTooling: @unchecked Sendable, GitUpdateTooling {
+    private let queue = DispatchQueue(label: "AppDelegateTests.CountingGitUpdateTooling")
+    private(set) var fetchLatestReleaseTagCallCount = 0
+    var latestReleaseTag: String?
+
+    init(latestReleaseTag: String? = nil) {
+        self.latestReleaseTag = latestReleaseTag
+    }
+
+    func runGit(
+        arguments: [String],
+        repositoryURL: URL,
+        timeoutNanoseconds: UInt64
+    ) async throws -> GitCommandResult {
+        GitCommandResult(exitStatus: 0, stdout: "", stderr: "")
+    }
+
+    func launchDetachedUpdate(configuration: GitUpdateRepositoryConfiguration) throws {}
+
+    func fetchLatestReleaseTag(
+        repositorySlug: String,
+        timeoutNanoseconds: UInt64
+    ) async throws -> String? {
+        queue.sync {
+            fetchLatestReleaseTagCallCount += 1
+            return latestReleaseTag
+        }
     }
 }
 

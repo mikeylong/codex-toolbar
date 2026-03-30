@@ -32,6 +32,35 @@ final class ToolbarPreferencesTests: XCTestCase {
         XCTAssertFalse(preferences.isCreditsVisible)
     }
 
+    func testOpenAIUsageVisibilityDefaultsToHidden() {
+        let defaults = Self.makeDefaults()
+        let preferences = ToolbarPreferences(defaults: defaults)
+
+        XCTAssertFalse(preferences.isOpenAIUsageVisible)
+    }
+
+    func testOpenAIUsageVisibilitySetRoundTrips() {
+        let defaults = Self.makeDefaults()
+        let preferences = ToolbarPreferences(defaults: defaults)
+
+        preferences.setOpenAIUsageVisible(true)
+        XCTAssertTrue(preferences.isOpenAIUsageVisible)
+
+        preferences.setOpenAIUsageVisible(false)
+        XCTAssertFalse(preferences.isOpenAIUsageVisible)
+    }
+
+    func testOpenAIUsageVisibilityToggleFlipsStoredValue() {
+        let defaults = Self.makeDefaults()
+        let preferences = ToolbarPreferences(defaults: defaults)
+
+        preferences.toggleOpenAIUsageVisibility()
+        XCTAssertTrue(preferences.isOpenAIUsageVisible)
+
+        preferences.toggleOpenAIUsageVisibility()
+        XCTAssertFalse(preferences.isOpenAIUsageVisible)
+    }
+
     func testGitUpdateRepositoryConfigurationRoundTrips() {
         let defaults = Self.makeDefaults()
         let preferences = ToolbarPreferences(defaults: defaults)

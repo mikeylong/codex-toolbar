@@ -29,6 +29,8 @@ final class OpenAIUsageStore {
         case failure(String)
     }
 
+    nonisolated static let staleRefreshMaximumAge: TimeInterval = 60
+
     let isEnabled: Bool
     private(set) var hasConfiguredAdminKey = false
     private(set) var isLoading = false
@@ -54,7 +56,7 @@ final class OpenAIUsageStore {
     init(
         client: any OpenAIUsageClient = LiveOpenAIUsageClient(),
         adminKeyStore: any OpenAIAdminKeyStore = KeychainOpenAIAdminKeyStore(),
-        refreshDelayNanosecondsProvider: @escaping @Sendable () -> UInt64 = { 15 * 60 * 1_000_000_000 },
+        refreshDelayNanosecondsProvider: @escaping @Sendable () -> UInt64 = { OpenAIUsageStore.defaultRefreshDelayNanoseconds() },
         nowProvider: @escaping @Sendable () -> Date = { Date() },
         calendar: Calendar = .current,
         locale: Locale = .current,
@@ -312,6 +314,13 @@ final class OpenAIUsageStore {
         costsFailureMessage = nil
         usageFailureMessage = nil
         generalStatusMessage = Self.missingKeyMessage
+    }
+
+    nonisolated static func defaultRefreshDelayNanoseconds(
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> UInt64 {
+        RateLimitStore.defaultRefreshDelayNanoseconds(now: now, calendar: calendar)
     }
 
     private static func queryWindow(now: Date, calendar: Calendar) -> QueryWindow {

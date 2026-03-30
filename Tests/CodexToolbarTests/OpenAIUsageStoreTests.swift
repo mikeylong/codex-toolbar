@@ -109,6 +109,50 @@ final class OpenAIUsageStoreTests: XCTestCase {
         XCTAssertTrue(store.viewData?.periodSummaries.isEmpty ?? false)
     }
 
+    func testDefaultRefreshDelayMatchesRateLimitStoreMinuteBoundary() {
+        let now = Self.date("2026-03-30T12:34:45Z")
+        let calendar = Self.makeCalendar()
+
+        XCTAssertEqual(
+            OpenAIUsageStore.defaultRefreshDelayNanoseconds(now: now, calendar: calendar),
+            RateLimitStore.defaultRefreshDelayNanoseconds(now: now, calendar: calendar)
+        )
+    }
+
+    func testRefreshIfNeededUsesOneMinuteStaleThreshold() async {
+        let client = FakeStoreOpenAIUsageClient()
+        client.costBuckets = [
+            Self.costBucket(start: "2026-03-30T00:00:00Z", amount: "1.00")
+        ]
+        client.usageBuckets = [
+            Self.usageBucket(start: "2026-03-30T00:00:00Z", requests: 2, input: 20, output: 10)
+        ]
+        let clock = TestClock(now: Self.date("2026-03-30T12:00:00Z"))
+        let store = OpenAIUsageStore(
+            client: client,
+            adminKeyStore: FakeStoreOpenAIAdminKeyStore(initialKey: "sk-admin-123"),
+            nowProvider: { clock.now },
+            calendar: Self.makeCalendar(),
+            locale: Locale(identifier: "en_US_POSIX"),
+            timeZone: TimeZone(secondsFromGMT: 0)!,
+            isEnabled: true
+        )
+
+        await store.refreshNow()
+        XCTAssertEqual(client.costsCallCount, 1)
+        XCTAssertEqual(client.usageCallCount, 1)
+
+        clock.now = Self.date("2026-03-30T12:00:59Z")
+        await store.refreshIfNeeded(maxAge: OpenAIUsageStore.staleRefreshMaximumAge)
+        XCTAssertEqual(client.costsCallCount, 1)
+        XCTAssertEqual(client.usageCallCount, 1)
+
+        clock.now = Self.date("2026-03-30T12:01:00Z")
+        await store.refreshIfNeeded(maxAge: OpenAIUsageStore.staleRefreshMaximumAge)
+        XCTAssertEqual(client.costsCallCount, 2)
+        XCTAssertEqual(client.usageCallCount, 2)
+    }
+
     private func makeStore(
         adminKey: String?,
         client: FakeStoreOpenAIUsageClient = FakeStoreOpenAIUsageClient()
@@ -208,11 +252,21 @@ private final class FakeStoreOpenAIAdminKeyStore: @unchecked Sendable, OpenAIAdm
     }
 }
 
+private final class TestClock: @unchecked Sendable {
+    var now: Date
+
+    init(now: Date) {
+        self.now = now
+    }
+}
+
 private final class FakeStoreOpenAIUsageClient: @unchecked Sendable, OpenAIUsageClient {
     var costBuckets: [OpenAICostBucket] = []
     var usageBuckets: [OpenAICompletionsUsageBucket] = []
     var costsError: Error?
     var usageError: Error?
+    private(set) var costsCallCount = 0
+    private(set) var usageCallCount = 0
 
     func readCosts(
         adminKey: String,
@@ -220,6 +274,7 @@ private final class FakeStoreOpenAIUsageClient: @unchecked Sendable, OpenAIUsage
         endTime: Int64,
         limit: Int
     ) async throws -> [OpenAICostBucket] {
+        costsCallCount += 1
         if let costsError {
             throw costsError
         }
@@ -232,6 +287,7 @@ private final class FakeStoreOpenAIUsageClient: @unchecked Sendable, OpenAIUsage
         endTime: Int64,
         limit: Int
     ) async throws -> [OpenAICompletionsUsageBucket] {
+        usageCallCount += 1
         if let usageError {
             throw usageError
         }

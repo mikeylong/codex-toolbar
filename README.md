@@ -6,7 +6,7 @@ A small macOS menu bar app that shows your Codex rate-limit remaining values.
 
 - Shows a compact progress bar for the most constrained core Codex window in the menu bar, including multi-week windows.
 - Shows a popover with used/remaining percentages, progress bars, and reset timing.
-- Optionally shows organization-level OpenAI API usage in the popover when you configure an `OPENAI_ADMIN_KEY`.
+- Optionally shows organization-level OpenAI API usage in the popover when you enable the view and configure an `OPENAI_ADMIN_KEY`.
 - Adds an `Open Codex` button in the popover when the Codex desktop app is installed.
 - Refreshes automatically on system clock minute boundaries.
 - Supports manual refresh from the menu bar item's right-click menu.
@@ -49,9 +49,9 @@ That quits `CodexToolbar` if it is running, removes its launch-at-login registra
 ## Use
 
 - Left-click the menu bar item to see the current rate-limit status panel.
-- Use the OpenAI API usage section in the popover after configuring an `OPENAI_ADMIN_KEY` from the right-click menu.
+- Enable `Show API usage` from the right-click menu, then use the OpenAI API usage section in the popover after configuring an `OPENAI_ADMIN_KEY`.
 - Use the popover's `Open Codex` button to jump into the Codex desktop app when it is installed locally.
-- Right-click the menu bar item for `Refresh now`, `Launch at login`, `Configure OpenAI admin key…`, `Refresh OpenAI usage`, and `Quit`.
+- Right-click the menu bar item for `Refresh now`, `Launch at login`, `Show API usage`, `Configure OpenAI admin key…`, and `Quit`.
 - Use `Launch at login` after running the installed app from `~/Applications`.
 
 ## Screenshots
