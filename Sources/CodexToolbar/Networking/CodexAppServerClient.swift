@@ -43,6 +43,8 @@ enum CodexLoginStatus: Equatable, Sendable {
 }
 
 actor CodexAppServerClient: CodexRateLimitClient {
+    nonisolated static let snapshotLoadTimeoutSeconds: TimeInterval = 20
+
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let eventStream: AsyncStream<CodexAppServerEvent>
@@ -231,7 +233,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
                 return
             }
 
-            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 5) {
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + Self.snapshotLoadTimeoutSeconds) {
                 collector.handleTimeout()
             }
         }
@@ -512,6 +514,7 @@ private final class SnapshotLoadCollector: @unchecked Sendable {
     private var stderrBuffer = Data()
     private var account: GetAccountResponse?
     private var rateLimits: GetAccountRateLimitsResponse?
+    private var failure: Error?
 
     init(
         process: Process,
@@ -532,6 +535,7 @@ private final class SnapshotLoadCollector: @unchecked Sendable {
 
         var resolvedAccount: GetAccountResponse?
         var resolvedRateLimits: GetAccountRateLimitsResponse?
+        var resolvedFailure: Error?
 
         lock.lock()
         stdoutBuffer.append(data)
@@ -544,7 +548,13 @@ private final class SnapshotLoadCollector: @unchecked Sendable {
 
         resolvedAccount = account
         resolvedRateLimits = rateLimits
+        resolvedFailure = failure
         lock.unlock()
+
+        if let resolvedFailure {
+            finish(.failure(resolvedFailure))
+            return
+        }
 
         if let resolvedAccount, let resolvedRateLimits {
             finish(.success((resolvedAccount, resolvedRateLimits)))
@@ -562,8 +572,14 @@ private final class SnapshotLoadCollector: @unchecked Sendable {
         lock.lock()
         let resolvedAccount = account
         let resolvedRateLimits = rateLimits
+        let resolvedFailure = failure
         let stderrString = String(decoding: stderrBuffer, as: UTF8.self)
         lock.unlock()
+
+        if let resolvedFailure {
+            finish(.failure(resolvedFailure))
+            return
+        }
 
         if let resolvedAccount, let resolvedRateLimits {
             finish(.success((resolvedAccount, resolvedRateLimits)))
@@ -578,8 +594,14 @@ private final class SnapshotLoadCollector: @unchecked Sendable {
 
     func handleTimeout() {
         lock.lock()
+        let resolvedFailure = failure
         let stderrString = String(decoding: stderrBuffer, as: UTF8.self)
         lock.unlock()
+
+        if let resolvedFailure {
+            finish(.failure(resolvedFailure))
+            return
+        }
 
         let message = stderrString.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
             ?? "Timed out reading Codex rate limits."
@@ -594,18 +616,42 @@ private final class SnapshotLoadCollector: @unchecked Sendable {
         guard
             let jsonObject = try? JSONSerialization.jsonObject(with: lineData),
             let message = jsonObject as? [String: Any],
-            let id = message["id"] as? String,
+            let id = message["id"] as? String
+        else {
+            return
+        }
+
+        if let errorObject = message["error"] as? [String: Any] {
+            let message = errorObject["message"] as? String ?? "Codex app-server request failed."
+            failure = CodexAppServerError.serverError(message)
+            return
+        }
+
+        guard id == "2" || id == "3" else {
+            return
+        }
+
+        guard
             let result = message["result"],
             let resultData = try? JSONSerialization.data(withJSONObject: result)
         else {
+            failure = CodexAppServerError.invalidResponse
             return
         }
 
         switch id {
         case "2":
-            account = try? decoder.decode(GetAccountResponse.self, from: resultData)
+            do {
+                account = try decoder.decode(GetAccountResponse.self, from: resultData)
+            } catch {
+                failure = CodexAppServerError.invalidResponse
+            }
         case "3":
-            rateLimits = try? decoder.decode(GetAccountRateLimitsResponse.self, from: resultData)
+            do {
+                rateLimits = try decoder.decode(GetAccountRateLimitsResponse.self, from: resultData)
+            } catch {
+                failure = CodexAppServerError.invalidResponse
+            }
         default:
             break
         }

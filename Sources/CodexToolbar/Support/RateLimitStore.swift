@@ -222,7 +222,7 @@ final class RateLimitStore {
                 return
             }
 
-            let refreshToken = source != .startup
+            let refreshToken = shouldRefreshAccountToken(for: source)
             debugDetail = "Loading snapshot (refreshToken=\(refreshToken))"
             let (account, response) = try await client.loadSnapshot(refreshToken: refreshToken)
             debugDetail = "Snapshot loaded"
@@ -350,6 +350,15 @@ final class RateLimitStore {
             return true
         case .timer:
             return cards.isEmpty || statusMessage == Self.signInMessage || staleMessage == Self.signInMessage
+        }
+    }
+
+    private func shouldRefreshAccountToken(for source: RefreshSource) -> Bool {
+        switch source {
+        case .manual, .reconnect:
+            return true
+        case .startup, .timer:
+            return false
         }
     }
 

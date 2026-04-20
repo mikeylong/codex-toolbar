@@ -646,6 +646,24 @@ final class RateLimitStoreTests: XCTestCase {
         await store.stop()
     }
 
+    func testPeriodicRefreshDoesNotForceTokenRefresh() async {
+        let client = FakeCodexRateLimitClient()
+        let store = RateLimitStore(
+            client: client,
+            reconnectDelayNanoseconds: 10_000_000_000,
+            refreshDelayNanosecondsProvider: { 50_000_000 }
+        )
+
+        await store.start()
+        await waitUntil {
+            client.readAccountRefreshTokens.count >= 2
+        }
+
+        XCTAssertEqual(Array(client.readAccountRefreshTokens.prefix(2)), [false, false])
+        XCTAssertFalse(client.readAccountRefreshTokens.contains(true))
+        await store.stop()
+    }
+
     func testManualRefreshFailurePreservesCardsAndShowsErrorState() async {
         let client = FakeCodexRateLimitClient()
         let store = RateLimitStore(

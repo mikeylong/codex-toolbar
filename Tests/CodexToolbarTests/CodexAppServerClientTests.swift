@@ -2,6 +2,10 @@ import XCTest
 @testable import CodexToolbar
 
 final class CodexAppServerClientTests: XCTestCase {
+    func testSnapshotLoadTimeoutAllowsSlowTokenRefreshes() {
+        XCTAssertGreaterThanOrEqual(CodexAppServerClient.snapshotLoadTimeoutSeconds, 15)
+    }
+
     func testCodexPathCandidatesIncludeCommonFallbacks() {
         let candidates = CodexAppServerClient.codexPathCandidates(
             environmentPath: "/usr/bin:/bin",

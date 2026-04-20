@@ -19,6 +19,10 @@ final class InstallScriptTests: XCTestCase {
             try String(contentsOf: environment.openLog, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
             environment.targetApp.path
         )
+        let defaultsLog = try String(contentsOf: environment.defaultsLog, encoding: .utf8)
+        XCTAssertTrue(defaultsLog.contains("write com.mikelong.codextoolbar gitUpdate.repositoryRoot -string \(environment.repoRoot.path)"))
+        XCTAssertTrue(defaultsLog.contains("write com.mikelong.codextoolbar gitUpdate.remoteName -string origin"))
+        XCTAssertTrue(defaultsLog.contains("write com.mikelong.codextoolbar gitUpdate.branchName -string main"))
         XCTAssertEqual(hiddenAppArtifactPaths(in: environment.targetDir, prefix: ".CodexToolbar.stage.").count, 0)
         XCTAssertEqual(hiddenAppArtifactPaths(in: environment.targetDir, prefix: ".CodexToolbar.backup.").count, 0)
     }
@@ -58,6 +62,7 @@ final class InstallScriptTests: XCTestCase {
         let targetDir = homeDir.appendingPathComponent("Applications", isDirectory: true)
         let targetApp = targetDir.appendingPathComponent("CodexToolbar.app", isDirectory: true)
         let openLog = root.appendingPathComponent("open.log")
+        let defaultsLog = root.appendingPathComponent("defaults.log")
 
         try FileManager.default.createDirectory(at: scriptsDir, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
@@ -72,6 +77,7 @@ final class InstallScriptTests: XCTestCase {
         try writeExecutable(sourceInstallScript, to: scriptsDir.appendingPathComponent("install_app.sh"))
         try writeExecutable(fakeBuildScript(), to: scriptsDir.appendingPathComponent("build_app.sh"))
         try writeExecutable(fakeOpenScript(), to: fakeBinDir.appendingPathComponent("open"))
+        try writeExecutable(fakeDefaultsScript(), to: fakeBinDir.appendingPathComponent("defaults"))
         try writeExecutable("#!/bin/zsh\nexit 1\n", to: fakeBinDir.appendingPathComponent("pgrep"))
         try writeExecutable("#!/bin/zsh\nexit 0\n", to: fakeBinDir.appendingPathComponent("pkill"))
 
@@ -93,7 +99,8 @@ final class InstallScriptTests: XCTestCase {
             targetDir: targetDir,
             targetApp: targetApp,
             targetAppInfoPlist: targetApp.appendingPathComponent("Contents/Info.plist"),
-            openLog: openLog
+            openLog: openLog,
+            defaultsLog: defaultsLog
         )
     }
 
@@ -106,6 +113,7 @@ final class InstallScriptTests: XCTestCase {
         var shellEnvironment = ProcessInfo.processInfo.environment
         shellEnvironment["HOME"] = environment.homeDir.path
         shellEnvironment["OPEN_LOG"] = environment.openLog.path
+        shellEnvironment["DEFAULTS_LOG"] = environment.defaultsLog.path
         shellEnvironment["PATH"] = "\(environment.fakeBinDir.path):\(shellEnvironment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin")"
         process.environment = shellEnvironment
 
@@ -162,6 +170,14 @@ final class InstallScriptTests: XCTestCase {
         #!/bin/zsh
         set -euo pipefail
         echo "$1" >"$OPEN_LOG"
+        """
+    }
+
+    private func fakeDefaultsScript() -> String {
+        """
+        #!/bin/zsh
+        set -euo pipefail
+        printf '%s\\n' "$*" >>"$DEFAULTS_LOG"
         """
     }
 
@@ -244,6 +260,7 @@ private struct ScriptEnvironment {
     let targetApp: URL
     let targetAppInfoPlist: URL
     let openLog: URL
+    let defaultsLog: URL
 }
 
 private struct ScriptRunResult {
