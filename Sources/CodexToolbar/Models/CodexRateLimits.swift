@@ -194,6 +194,118 @@ enum RateLimitProgressState: Equatable, Sendable {
     }
 }
 
+struct RateLimitProjectionViewData: Equatable, Sendable {
+    enum State: Equatable, Sendable {
+        case resetFirst
+        case warning
+        case critical
+    }
+
+    let state: State
+    let windowStartDate: Date
+    let currentDate: Date
+    let resetDate: Date
+    let projectedEmptyDate: Date
+    let currentRemainingPercent: Int
+    let dailyUsePercent: Double
+    let currentPosition: Double
+    let resetPosition: Double
+    let projectedEmptyPosition: Double
+    let summaryText: String
+    let detailText: String
+    let accessibilityLabel: String
+
+    init?(
+        window: CodexRateLimitWindow,
+        remainingPercent: Int,
+        now: Date,
+        calendar: Calendar,
+        locale: Locale,
+        timeZone: TimeZone
+    ) {
+        guard let resetDate = window.resetDate,
+              let windowDurationMins = window.windowDurationMins,
+              windowDurationMins > 0,
+              window.usedPercent > 0
+        else {
+            return nil
+        }
+
+        let windowDurationSeconds = TimeInterval(windowDurationMins) * 60
+        let windowStartDate = resetDate.addingTimeInterval(-windowDurationSeconds)
+        let elapsedSeconds = now.timeIntervalSince(windowStartDate)
+        guard elapsedSeconds > 0 else {
+            return nil
+        }
+
+        let elapsedDays = elapsedSeconds / 86_400
+        let dailyUsePercent = Double(window.usedPercent) / elapsedDays
+        guard dailyUsePercent > 0, dailyUsePercent.isFinite else {
+            return nil
+        }
+
+        let projectedEmptyDate: Date
+        if remainingPercent <= 0 {
+            projectedEmptyDate = now
+        } else {
+            let daysUntilEmpty = Double(remainingPercent) / dailyUsePercent
+            guard daysUntilEmpty.isFinite else {
+                return nil
+            }
+            projectedEmptyDate = now.addingTimeInterval(daysUntilEmpty * 86_400)
+        }
+
+        let chartEndDate = max(resetDate, projectedEmptyDate)
+        let chartDurationSeconds = chartEndDate.timeIntervalSince(windowStartDate)
+        guard chartDurationSeconds > 0 else {
+            return nil
+        }
+
+        let runsOutBeforeReset = projectedEmptyDate < resetDate
+        let secondsUntilEmpty = projectedEmptyDate.timeIntervalSince(now)
+        let state: State
+        if runsOutBeforeReset {
+            state = secondsUntilEmpty <= 86_400 ? .critical : .warning
+        } else {
+            state = .resetFirst
+        }
+
+        let projectedText = RateLimitFormatter.absoluteResetText(
+            for: projectedEmptyDate,
+            now: now,
+            calendar: calendar,
+            locale: locale,
+            timeZone: timeZone
+        )
+        let summaryText = runsOutBeforeReset ? "Projected empty before reset" : "Reset comes first"
+        let detailText = runsOutBeforeReset
+            ? "Empty \(projectedText) at pace"
+            : "On pace to last through reset"
+
+        self.state = state
+        self.windowStartDate = windowStartDate
+        currentDate = now
+        self.resetDate = resetDate
+        self.projectedEmptyDate = projectedEmptyDate
+        currentRemainingPercent = remainingPercent
+        self.dailyUsePercent = dailyUsePercent
+        currentPosition = Self.clampedPosition(for: now, start: windowStartDate, durationSeconds: chartDurationSeconds)
+        resetPosition = Self.clampedPosition(for: resetDate, start: windowStartDate, durationSeconds: chartDurationSeconds)
+        projectedEmptyPosition = Self.clampedPosition(for: projectedEmptyDate, start: windowStartDate, durationSeconds: chartDurationSeconds)
+        self.summaryText = summaryText
+        self.detailText = detailText
+        accessibilityLabel = "Weekly pace. \(summaryText). \(detailText). \(remainingPercent)% remaining."
+    }
+
+    private static func clampedPosition(for date: Date, start: Date, durationSeconds: TimeInterval) -> Double {
+        guard durationSeconds > 0 else {
+            return 0
+        }
+
+        return min(max(date.timeIntervalSince(start) / durationSeconds, 0), 1)
+    }
+}
+
 struct RateLimitCardViewData: Equatable, Sendable {
     let title: String
     let compactLabel: String
@@ -210,6 +322,7 @@ struct RateLimitCardViewData: Equatable, Sendable {
     let categoryLabel: String?
     let statusMessage: String?
     let resetDate: Date?
+    let projection: RateLimitProjectionViewData?
 
     var accessibilityLabel: String {
         var parts = [
@@ -221,6 +334,11 @@ struct RateLimitCardViewData: Equatable, Sendable {
 
         if let statusMessage {
             parts.insert(statusMessage, at: 1)
+        }
+
+        if let projection {
+            parts.append(projection.summaryText)
+            parts.append(projection.detailText)
         }
 
         return parts.joined(separator: ". ")
@@ -283,6 +401,21 @@ struct RateLimitCardViewData: Equatable, Sendable {
         progressState = RateLimitProgressState(remainingPercent: remainingPercent)
         self.isPrimary = isPrimary
         resetDate = window.resetDate
+        if familyId == GetAccountRateLimitsResponse.codexLimitId,
+           let duration = window.windowDurationMins,
+           RateLimitFormatter.normalizedWindowMinutes(duration) == 10_080
+        {
+            projection = RateLimitProjectionViewData(
+                window: window,
+                remainingPercent: remainingPercent,
+                now: now,
+                calendar: calendar,
+                locale: locale,
+                timeZone: timeZone
+            )
+        } else {
+            projection = nil
+        }
 
         switch progressState {
         case .normal:

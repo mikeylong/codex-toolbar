@@ -66,6 +66,23 @@ final class ScreenshotScenarioTests: XCTestCase {
         XCTAssertEqual(store.lastUpdated, ScreenshotScenario.multiweek.lastUpdated)
     }
 
+    func testProjectionScenarioBuildsWeeklyResetRiskChartData() throws {
+        let scenario = try XCTUnwrap(ScreenshotScenario.named("projection"))
+        let cards = RateLimitStore.makeCards(
+            from: scenario.snapshot,
+            now: scenario.now,
+            calendar: scenario.calendar,
+            locale: scenario.locale,
+            timeZone: scenario.timeZone
+        )
+        let weeklyCard = try XCTUnwrap(cards.first { $0.title == "Weekly" })
+        let projection = try XCTUnwrap(weeklyCard.projection)
+
+        XCTAssertEqual(projection.state, .resetFirst)
+        XCTAssertEqual(projection.summaryText, "Reset comes first")
+        XCTAssertEqual(projection.detailText, "On pace to last through reset")
+    }
+
     func testSparkScenarioBuildsFamilySectionsWithCodexFirst() throws {
         let scenario = try XCTUnwrap(ScreenshotScenario.named("spark"))
         let cards = RateLimitStore.makeCards(

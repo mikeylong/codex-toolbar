@@ -44,6 +44,8 @@ struct ScreenshotScenario: Equatable, Sendable {
             return exhausted
         case "multiweek":
             return multiweek
+        case "projection":
+            return projection
         case "spark":
             return spark
         default:
@@ -178,6 +180,22 @@ struct ScreenshotScenario: Equatable, Sendable {
                 secondaryReset: secondaryReset,
                 secondaryDurationMinutes: 10081
             ),
+            rateLimitsByLimitId: nil,
+            now: now,
+            lastUpdated: now,
+            calendar: calendar,
+            locale: locale,
+            timeZone: pacificTimeZone
+        )
+    }()
+
+    static let projection: ScreenshotScenario = {
+        let now = date(year: 2026, month: 5, day: 13, hour: 12, minute: 0)
+        let primaryReset = date(year: 2026, month: 5, day: 13, hour: 17, minute: 0)
+        let secondaryReset = date(year: 2026, month: 5, day: 18, hour: 12, minute: 0)
+        return ScreenshotScenario(
+            name: "projection",
+            snapshot: snapshot(primaryUsed: 29, primaryReset: primaryReset, secondaryUsed: 25, secondaryReset: secondaryReset),
             rateLimitsByLimitId: nil,
             now: now,
             lastUpdated: now,

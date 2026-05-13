@@ -315,6 +315,11 @@ private struct RateLimitCardView: View {
                 .font(.body)
                 .foregroundStyle(palette.primaryText)
 
+            if let projection = card.projection {
+                RateLimitProjectionView(projection: projection, palette: palette)
+                    .padding(.top, 2)
+            }
+
             if card.progressState == .exhausted {
                 Text("Requests will resume when window resets.")
                     .font(.body)
@@ -324,6 +329,131 @@ private struct RateLimitCardView: View {
         .padding(.vertical, card.isPrimary ? 2 : 0)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(card.accessibilityLabel)
+    }
+}
+
+private struct RateLimitProjectionView: View {
+    let projection: RateLimitProjectionViewData
+    let palette: StatusMenuPalette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            RateLimitProjectionSparkline(projection: projection, palette: palette)
+                .frame(height: 31)
+
+            Text(projection.detailText)
+                .font(.body)
+                .foregroundStyle(captionColor)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(projection.accessibilityLabel)
+    }
+
+    private var captionColor: Color {
+        switch projection.state {
+        case .resetFirst:
+            return palette.secondaryText
+        case .warning, .critical:
+            return projectionColor(for: projection.state, palette: palette)
+        }
+    }
+}
+
+private struct RateLimitProjectionSparkline: View {
+    let projection: RateLimitProjectionViewData
+    let palette: StatusMenuPalette
+
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let height = geometry.size.height
+            let horizontalInset: CGFloat = 2
+            let verticalInset: CGFloat = 2
+            let chartWidth = max(width - horizontalInset * 2, 1)
+            let chartHeight = max(height - verticalInset * 2, 1)
+            let topY = verticalInset
+            let bottomY = verticalInset + chartHeight
+            let startPoint = CGPoint(x: horizontalInset, y: topY)
+            let currentPoint = point(
+                xPosition: projection.currentPosition,
+                remainingPercent: projection.currentRemainingPercent,
+                horizontalInset: horizontalInset,
+                chartWidth: chartWidth,
+                topY: topY,
+                chartHeight: chartHeight
+            )
+            let emptyPoint = CGPoint(
+                x: horizontalInset + chartWidth * CGFloat(projection.projectedEmptyPosition),
+                y: bottomY
+            )
+            let resetX = horizontalInset + chartWidth * CGFloat(projection.resetPosition)
+
+            ZStack(alignment: .topLeading) {
+                Path { path in
+                    path.move(to: CGPoint(x: horizontalInset, y: bottomY))
+                    path.addLine(to: CGPoint(x: width - horizontalInset, y: bottomY))
+                }
+                .stroke(palette.divider.opacity(0.55), lineWidth: 0.75)
+
+                Path { path in
+                    path.move(to: CGPoint(x: resetX, y: topY))
+                    path.addLine(to: CGPoint(x: resetX, y: bottomY))
+                }
+                .stroke(palette.secondaryText.opacity(0.48), style: StrokeStyle(lineWidth: 0.75, dash: [2, 2]))
+
+                Path { path in
+                    path.move(to: startPoint)
+                    path.addLine(to: currentPoint)
+                    path.addLine(to: emptyPoint)
+                }
+                .stroke(statusColor, style: StrokeStyle(lineWidth: 1.25, lineCap: .round, lineJoin: .round))
+
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 4, height: 4)
+                    .position(currentPoint)
+
+                Circle()
+                    .stroke(statusColor, lineWidth: 1.25)
+                    .frame(width: 5, height: 5)
+                    .position(emptyPoint)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var statusColor: Color {
+        projectionColor(for: projection.state, palette: palette)
+    }
+
+    private func point(
+        xPosition: Double,
+        remainingPercent: Int,
+        horizontalInset: CGFloat,
+        chartWidth: CGFloat,
+        topY: CGFloat,
+        chartHeight: CGFloat
+    ) -> CGPoint {
+        let remainingRatio = min(max(CGFloat(remainingPercent) / 100, 0), 1)
+        return CGPoint(
+            x: horizontalInset + chartWidth * CGFloat(xPosition),
+            y: topY + chartHeight * (1 - remainingRatio)
+        )
+    }
+}
+
+private func projectionColor(
+    for state: RateLimitProjectionViewData.State,
+    palette: StatusMenuPalette
+) -> Color {
+    switch state {
+    case .resetFirst:
+        return palette.normalFill
+    case .warning:
+        return palette.warningFill
+    case .critical:
+        return palette.criticalFill
     }
 }
 
