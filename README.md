@@ -6,6 +6,7 @@ A small macOS menu bar app that shows your Codex rate-limit remaining values.
 
 - Shows a compact progress bar for the most constrained core Codex window in the menu bar, including multi-week windows.
 - Shows a popover with used/remaining percentages, progress bars, and reset timing.
+- Projects from the current Weekly pace whether tokens will run out before reset.
 - Optionally shows organization-level OpenAI API usage in the popover when you enable the view and configure an `OPENAI_ADMIN_KEY`.
 - Adds an `Open Codex` button in the popover when the Codex desktop app is installed.
 - Refreshes automatically on system clock minute boundaries.
@@ -56,10 +57,10 @@ That quits `CodexToolbar` if it is running, removes its launch-at-login registra
 
 ## Screenshots
 
-| Theme | Normal | Warning | Critical |
-| --- | --- | --- | --- |
-| Light | ![Normal light mode status popover](screenshots/readme-normal-light-popover.png) | ![Warning light mode status popover](screenshots/readme-warning-light-popover.png) | ![Critical light mode status popover](screenshots/readme-critical-light-popover.png) |
-| Dark | ![Normal dark mode status popover](screenshots/readme-normal-dark-popover.png) | ![Warning dark mode status popover](screenshots/readme-warning-dark-popover.png) | ![Critical dark mode status popover](screenshots/readme-critical-dark-popover.png) |
+| Theme | Normal | Warning | Critical | Projection |
+| --- | --- | --- | --- | --- |
+| Light | ![Normal light mode status popover](screenshots/readme-normal-light-popover.png) | ![Warning light mode status popover](screenshots/readme-warning-light-popover.png) | ![Critical light mode status popover](screenshots/readme-critical-light-popover.png) | ![Projection light mode status popover](screenshots/readme-projection-light-popover.png) |
+| Dark | ![Normal dark mode status popover](screenshots/readme-normal-dark-popover.png) | ![Warning dark mode status popover](screenshots/readme-warning-dark-popover.png) | ![Critical dark mode status popover](screenshots/readme-critical-dark-popover.png) | ![Projection dark mode status popover](screenshots/readme-projection-dark-popover.png) |
 
 ## Notes
 

@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SCREENSHOTS_DIR="$ROOT_DIR/screenshots"
 APP_EXECUTABLE="$ROOT_DIR/dist/CodexToolbar.app/Contents/MacOS/CodexToolbar"
-README_SCENARIOS=(normal warning critical)
+README_SCENARIOS=(normal warning critical projection)
 
 "$ROOT_DIR/scripts/build_app.sh" >/dev/null
 
