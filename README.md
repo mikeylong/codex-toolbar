@@ -6,7 +6,7 @@ A small macOS menu bar app that shows your Codex rate-limit remaining values.
 
 - Shows a compact progress bar for the most constrained core Codex window in the menu bar, including multi-week windows.
 - Shows a popover with used/remaining percentages, progress bars, and reset timing.
-- Projects from the current Weekly pace whether tokens will run out before reset.
+- Projects from the current 5h and Weekly pace whether tokens will run out before reset.
 - Optionally shows organization-level OpenAI API usage in the popover when you enable the view and configure an `OPENAI_ADMIN_KEY`.
 - Adds an `Open Codex` button in the popover when the Codex desktop app is installed.
 - Refreshes automatically on system clock minute boundaries.

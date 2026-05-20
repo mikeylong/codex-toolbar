@@ -216,6 +216,7 @@ struct RateLimitProjectionViewData: Equatable, Sendable {
     let accessibilityLabel: String
 
     init?(
+        windowLabel: String,
         window: CodexRateLimitWindow,
         remainingPercent: Int,
         now: Date,
@@ -294,7 +295,7 @@ struct RateLimitProjectionViewData: Equatable, Sendable {
         projectedEmptyPosition = Self.clampedPosition(for: projectedEmptyDate, start: windowStartDate, durationSeconds: chartDurationSeconds)
         self.summaryText = summaryText
         self.detailText = detailText
-        accessibilityLabel = "Weekly pace. \(summaryText). \(detailText). \(remainingPercent)% remaining."
+        accessibilityLabel = "\(windowLabel) pace. \(summaryText). \(detailText). \(remainingPercent)% remaining."
     }
 
     private static func clampedPosition(for date: Date, start: Date, durationSeconds: TimeInterval) -> Double {
@@ -401,11 +402,12 @@ struct RateLimitCardViewData: Equatable, Sendable {
         progressState = RateLimitProgressState(remainingPercent: remainingPercent)
         self.isPrimary = isPrimary
         resetDate = window.resetDate
+        let normalizedDuration = window.windowDurationMins.map(RateLimitFormatter.normalizedWindowMinutes)
         if familyId == GetAccountRateLimitsResponse.codexLimitId,
-           let duration = window.windowDurationMins,
-           RateLimitFormatter.normalizedWindowMinutes(duration) == 10_080
+           normalizedDuration == 300 || normalizedDuration == 10_080
         {
             projection = RateLimitProjectionViewData(
+                windowLabel: title,
                 window: window,
                 remainingPercent: remainingPercent,
                 now: now,

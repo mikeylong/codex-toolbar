@@ -67,6 +67,39 @@ final class RateLimitCardViewDataTests: XCTestCase {
         XCTAssertEqual(projection.projectedEmptyPosition, 1.0, accuracy: 0.001)
         XCTAssertTrue(card.accessibilityLabel.contains("Reset comes first"))
         XCTAssertTrue(card.accessibilityLabel.contains("On pace to last through reset"))
+        XCTAssertTrue(projection.accessibilityLabel.contains("Weekly pace"))
+    }
+
+    func testFiveHourProjectionShowsResetFirstWhenProjectedEmptyFallsAfterReset() throws {
+        let now = makeDate(year: 2026, month: 5, day: 13, hour: 12, minute: 0)
+        let reset = makeDate(year: 2026, month: 5, day: 13, hour: 16, minute: 0)
+        let card = makeFiveHourCard(usedPercent: 10, reset: reset, now: now)
+        let projection = try XCTUnwrap(card.projection)
+
+        XCTAssertEqual(projection.state, .resetFirst)
+        XCTAssertEqual(projection.summaryText, "Reset comes first")
+        XCTAssertEqual(projection.detailText, "On pace to last through reset")
+        XCTAssertEqual(projection.dailyUsePercent, 240, accuracy: 0.001)
+        XCTAssertEqual(projection.projectedEmptyDate.timeIntervalSince1970, makeDate(year: 2026, month: 5, day: 13, hour: 21, minute: 0).timeIntervalSince1970, accuracy: 0.5)
+        XCTAssertEqual(projection.currentPosition, 0.1, accuracy: 0.001)
+        XCTAssertEqual(projection.resetPosition, 0.5, accuracy: 0.001)
+        XCTAssertEqual(projection.projectedEmptyPosition, 1.0, accuracy: 0.001)
+        XCTAssertTrue(projection.accessibilityLabel.contains("5h pace"))
+    }
+
+    func testFiveHourProjectionIsCriticalWhenProjectedEmptyFallsBeforeReset() throws {
+        let now = makeDate(year: 2026, month: 5, day: 13, hour: 12, minute: 0)
+        let reset = makeDate(year: 2026, month: 5, day: 13, hour: 16, minute: 0)
+        let card = makeFiveHourCard(usedPercent: 50, reset: reset, now: now)
+        let projection = try XCTUnwrap(card.projection)
+
+        XCTAssertEqual(projection.state, .critical)
+        XCTAssertEqual(projection.summaryText, "Projected empty before reset")
+        XCTAssertEqual(projection.detailText, "Empty 1:00 PM at pace")
+        XCTAssertEqual(projection.projectedEmptyDate.timeIntervalSince1970, makeDate(year: 2026, month: 5, day: 13, hour: 13, minute: 0).timeIntervalSince1970, accuracy: 0.5)
+        XCTAssertEqual(projection.currentPosition, 0.2, accuracy: 0.001)
+        XCTAssertEqual(projection.resetPosition, 1.0, accuracy: 0.001)
+        XCTAssertEqual(projection.projectedEmptyPosition, 0.4, accuracy: 0.001)
     }
 
     func testWeeklyProjectionWarnsWhenProjectedEmptyFallsBeforeReset() throws {
@@ -104,22 +137,37 @@ final class RateLimitCardViewDataTests: XCTestCase {
         XCTAssertEqual(projection.projectedEmptyDate, now)
     }
 
-    func testWeeklyProjectionIsHiddenWhenInputsAreUnavailable() {
+    func testProjectionIsHiddenWhenInputsAreUnavailable() {
         let now = makeDate(year: 2026, month: 5, day: 13, hour: 12, minute: 0)
-        let reset = makeDate(year: 2026, month: 5, day: 18, hour: 12, minute: 0)
+        let fiveHourReset = makeDate(year: 2026, month: 5, day: 13, hour: 16, minute: 0)
+        let weeklyReset = makeDate(year: 2026, month: 5, day: 18, hour: 12, minute: 0)
 
-        XCTAssertNil(makeWeeklyCard(usedPercent: 0, reset: reset, now: now).projection)
-        XCTAssertNil(makeWeeklyCard(usedPercent: 25, reset: nil, now: now).projection)
-        XCTAssertNil(makeCard(usedPercent: 25, reset: reset, durationMinutes: nil, now: now).projection)
-        XCTAssertNil(makeWeeklyCard(usedPercent: 25, reset: reset, now: makeDate(year: 2026, month: 5, day: 10, hour: 12, minute: 0)).projection)
+        XCTAssertNil(makeFiveHourCard(usedPercent: 0, reset: fiveHourReset, now: now).projection)
+        XCTAssertNil(makeFiveHourCard(usedPercent: 25, reset: nil, now: now).projection)
+        XCTAssertNil(makeCard(usedPercent: 25, reset: fiveHourReset, durationMinutes: nil, now: now).projection)
+        XCTAssertNil(makeFiveHourCard(usedPercent: 25, reset: fiveHourReset, now: makeDate(year: 2026, month: 5, day: 13, hour: 10, minute: 30)).projection)
+        XCTAssertNil(makeWeeklyCard(usedPercent: 0, reset: weeklyReset, now: now).projection)
+        XCTAssertNil(makeWeeklyCard(usedPercent: 25, reset: weeklyReset, now: makeDate(year: 2026, month: 5, day: 10, hour: 12, minute: 0)).projection)
     }
 
-    func testProjectionOnlyAppearsForCoreCodexWeeklyWindow() {
+    func testProjectionOnlyAppearsForCoreCodexFiveHourAndWeeklyWindows() {
         let now = makeDate(year: 2026, month: 5, day: 13, hour: 12, minute: 0)
-        let reset = makeDate(year: 2026, month: 5, day: 18, hour: 12, minute: 0)
-        let fiveHourCard = makeCard(usedPercent: 25, reset: reset, durationMinutes: 300, now: now)
+        let fiveHourReset = makeDate(year: 2026, month: 5, day: 13, hour: 16, minute: 0)
+        let weeklyReset = makeDate(year: 2026, month: 5, day: 18, hour: 12, minute: 0)
+        let coreFiveHourCard = makeFiveHourCard(usedPercent: 25, reset: fiveHourReset, now: now)
+        let coreWeeklyCard = makeWeeklyCard(usedPercent: 25, reset: weeklyReset, now: now)
+        let coreTwoWeekCard = makeCard(usedPercent: 25, reset: weeklyReset, durationMinutes: 20_160, now: now)
+        let supplementalFiveHourCard = RateLimitCardViewData(
+            window: makeWindow(usedPercent: 25, reset: fiveHourReset, durationMinutes: 300),
+            familyId: "codex_bengalfox",
+            categoryLabel: "GPT-5.3-Codex-Spark",
+            now: now,
+            calendar: testCalendar,
+            locale: testLocale,
+            timeZone: testTimeZone
+        )
         let supplementalWeeklyCard = RateLimitCardViewData(
-            window: makeWindow(usedPercent: 25, reset: reset, durationMinutes: 10_080),
+            window: makeWindow(usedPercent: 25, reset: weeklyReset, durationMinutes: 10_080),
             familyId: "codex_bengalfox",
             categoryLabel: "GPT-5.3-Codex-Spark",
             now: now,
@@ -128,7 +176,10 @@ final class RateLimitCardViewDataTests: XCTestCase {
             timeZone: testTimeZone
         )
 
-        XCTAssertNil(fiveHourCard.projection)
+        XCTAssertNotNil(coreFiveHourCard.projection)
+        XCTAssertNotNil(coreWeeklyCard.projection)
+        XCTAssertNil(coreTwoWeekCard.projection)
+        XCTAssertNil(supplementalFiveHourCard.projection)
         XCTAssertNil(supplementalWeeklyCard.projection)
     }
 
@@ -146,6 +197,10 @@ final class RateLimitCardViewDataTests: XCTestCase {
 
     private func makeWeeklyCard(usedPercent: Int, reset: Date?, now: Date) -> RateLimitCardViewData {
         makeCard(usedPercent: usedPercent, reset: reset, durationMinutes: 10_080, now: now)
+    }
+
+    private func makeFiveHourCard(usedPercent: Int, reset: Date?, now: Date) -> RateLimitCardViewData {
+        makeCard(usedPercent: usedPercent, reset: reset, durationMinutes: 300, now: now)
     }
 
     private func makeCard(

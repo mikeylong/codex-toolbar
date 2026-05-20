@@ -191,7 +191,7 @@ struct ScreenshotScenario: Equatable, Sendable {
 
     static let projection: ScreenshotScenario = {
         let now = date(year: 2026, month: 5, day: 13, hour: 12, minute: 0)
-        let primaryReset = date(year: 2026, month: 5, day: 13, hour: 17, minute: 0)
+        let primaryReset = date(year: 2026, month: 5, day: 13, hour: 16, minute: 0)
         let secondaryReset = date(year: 2026, month: 5, day: 18, hour: 12, minute: 0)
         return ScreenshotScenario(
             name: "projection",
