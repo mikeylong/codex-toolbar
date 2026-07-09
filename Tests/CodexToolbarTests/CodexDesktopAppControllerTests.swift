@@ -8,6 +8,8 @@ final class CodexDesktopAppControllerTests: XCTestCase {
         let candidates = CodexDesktopAppLocator.appBundleCandidates(homeDirectory: "/Users/example")
 
         XCTAssertEqual(candidates, [
+            "/Applications/ChatGPT.app",
+            "/Users/example/Applications/ChatGPT.app",
             "/Applications/Codex.app",
             "/Users/example/Applications/Codex.app"
         ])
