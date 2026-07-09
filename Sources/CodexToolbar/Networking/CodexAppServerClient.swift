@@ -382,6 +382,8 @@ actor CodexAppServerClient: CodexRateLimitClient {
 
     nonisolated static func codexPathCandidates(environmentPath: String, homeDirectory: String) -> [String] {
         let preferredAppCandidates = [
+            "/Applications/ChatGPT.app/Contents/Resources/codex",
+            URL(fileURLWithPath: homeDirectory).appendingPathComponent("Applications/ChatGPT.app/Contents/Resources/codex").path,
             "/Applications/Codex.app/Contents/Resources/codex",
             URL(fileURLWithPath: homeDirectory).appendingPathComponent("Applications/Codex.app/Contents/Resources/codex").path
         ]

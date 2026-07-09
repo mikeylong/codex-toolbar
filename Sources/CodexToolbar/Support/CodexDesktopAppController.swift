@@ -23,6 +23,8 @@ struct CodexDesktopAppLocator {
 
     static func appBundleCandidates(homeDirectory: String) -> [String] {
         let candidates = [
+            "/Applications/ChatGPT.app",
+            URL(fileURLWithPath: homeDirectory).appendingPathComponent("Applications/ChatGPT.app").path,
             "/Applications/Codex.app",
             URL(fileURLWithPath: homeDirectory).appendingPathComponent("Applications/Codex.app").path
         ]
@@ -55,7 +57,7 @@ enum CodexDesktopAppError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .notFound:
-            return "Codex.app was not found."
+            return "Codex desktop app was not found."
         }
     }
 }
