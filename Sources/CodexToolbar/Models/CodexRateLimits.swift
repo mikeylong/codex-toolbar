@@ -194,6 +194,14 @@ enum RateLimitProgressState: Equatable, Sendable {
     }
 }
 
+enum RateLimitProjectionGraphElement: Equatable, Sendable {
+    case pace
+    case current
+    case currentAndProjectedEmpty
+    case reset
+    case projectedEmpty
+}
+
 struct RateLimitProjectionViewData: Equatable, Sendable {
     enum State: Equatable, Sendable {
         case resetFirst
@@ -213,6 +221,10 @@ struct RateLimitProjectionViewData: Equatable, Sendable {
     let projectedEmptyPosition: Double
     let summaryText: String
     let detailText: String
+    let paceTooltipText: String
+    let currentTooltipText: String
+    let resetTooltipText: String
+    let projectedEmptyTooltipText: String
     let accessibilityLabel: String
 
     init?(
@@ -278,6 +290,18 @@ struct RateLimitProjectionViewData: Equatable, Sendable {
             locale: locale,
             timeZone: timeZone
         )
+        let resetText = RateLimitFormatter.absoluteResetText(
+            for: resetDate,
+            now: now,
+            calendar: calendar,
+            locale: locale,
+            timeZone: timeZone
+        )
+        let paceTooltipText = Self.paceTooltipText(
+            dailyUsePercent: dailyUsePercent,
+            windowDurationMins: windowDurationMins,
+            locale: locale
+        )
         let summaryText = runsOutBeforeReset ? "Projected empty before reset" : "Reset comes first"
         let detailText = runsOutBeforeReset
             ? "Empty \(projectedText) at pace"
@@ -295,7 +319,26 @@ struct RateLimitProjectionViewData: Equatable, Sendable {
         projectedEmptyPosition = Self.clampedPosition(for: projectedEmptyDate, start: windowStartDate, durationSeconds: chartDurationSeconds)
         self.summaryText = summaryText
         self.detailText = detailText
-        accessibilityLabel = "\(windowLabel) pace. \(summaryText). \(detailText). \(remainingPercent)% remaining."
+        self.paceTooltipText = paceTooltipText
+        currentTooltipText = "Now · \(remainingPercent)% remaining"
+        resetTooltipText = "Reset · \(resetText)"
+        projectedEmptyTooltipText = "Projected empty · \(projectedText) at current pace"
+        accessibilityLabel = "\(windowLabel) pace. \(paceTooltipText). \(summaryText). \(detailText). \(remainingPercent)% remaining."
+    }
+
+    func tooltipText(for element: RateLimitProjectionGraphElement) -> String {
+        switch element {
+        case .pace:
+            return paceTooltipText
+        case .current:
+            return currentTooltipText
+        case .currentAndProjectedEmpty:
+            return "Now · \(currentRemainingPercent)% remaining · projected empty"
+        case .reset:
+            return resetTooltipText
+        case .projectedEmpty:
+            return projectedEmptyTooltipText
+        }
     }
 
     private static func clampedPosition(for date: Date, start: Date, durationSeconds: TimeInterval) -> Double {
@@ -304,6 +347,23 @@ struct RateLimitProjectionViewData: Equatable, Sendable {
         }
 
         return min(max(date.timeIntervalSince(start) / durationSeconds, 0), 1)
+    }
+
+    private static func paceTooltipText(
+        dailyUsePercent: Double,
+        windowDurationMins: Int,
+        locale: Locale
+    ) -> String {
+        let usesHourlyPace = windowDurationMins < 1_440
+        let value = usesHourlyPace ? dailyUsePercent / 24 : dailyUsePercent
+        let formatter = NumberFormatter()
+        formatter.locale = locale
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = value < 1 ? 2 : 1
+        let formattedValue = formatter.string(from: NSNumber(value: value)) ?? String(Int(value.rounded()))
+        let unit = usesHourlyPace ? "hour" : "day"
+        return "Current pace · \(formattedValue)% used per \(unit)"
     }
 }
 
@@ -338,6 +398,7 @@ struct RateLimitCardViewData: Equatable, Sendable {
         }
 
         if let projection {
+            parts.append(projection.paceTooltipText)
             parts.append(projection.summaryText)
             parts.append(projection.detailText)
         }

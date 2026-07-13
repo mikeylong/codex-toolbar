@@ -435,7 +435,8 @@ final class RateLimitStore {
                 window: entry.window,
                 displayLabelOverride: displayLabelOverride(
                     role: entry.role,
-                    limitId: entry.limitId
+                    limitId: entry.limitId,
+                    windowDurationMins: entry.window.windowDurationMins
                 ),
                 familyId: entry.limitId,
                 categoryLabel: entry.categoryLabel,
@@ -577,9 +578,12 @@ final class RateLimitStore {
 
     private static func displayLabelOverride(
         role: WindowRole,
-        limitId: String?
+        limitId: String?,
+        windowDurationMins: Int?
     ) -> String? {
-        guard limitId == GetAccountRateLimitsResponse.codexLimitId else {
+        guard limitId == GetAccountRateLimitsResponse.codexLimitId,
+              windowDurationMins == nil
+        else {
             return nil
         }
 

@@ -479,9 +479,85 @@ final class RateLimitStoreTests: XCTestCase {
         )
 
         let cards = RateLimitStore.makeCards(from: snapshot)
+        let weeklyCard = cards.first { $0.usedPercent == 41 }
+
+        XCTAssertEqual(cards.count, 2)
+        XCTAssertEqual(weeklyCard?.compactLabel, "Weekly")
+        XCTAssertEqual(weeklyCard?.title, "Weekly")
+    }
+
+    func testMakeCardsUsesDurationWhenWeeklyWindowIsPrimary() {
+        let snapshot = CodexRateLimitsSnapshot(
+            credits: nil,
+            limitId: "codex",
+            limitName: "Codex",
+            planType: .pro,
+            primary: CodexRateLimitWindow(
+                resetsAt: 1_741_731_200,
+                usedPercent: 2,
+                windowDurationMins: 10_080
+            ),
+            secondary: nil
+        )
+
+        let cards = RateLimitStore.makeCards(from: snapshot)
 
         XCTAssertEqual(cards[0].compactLabel, "Weekly")
         XCTAssertEqual(cards[0].title, "Weekly")
+    }
+
+    func testMakeCardsFallsBackToCoreCodexRolesWhenDurationsAreMissing() {
+        let snapshot = CodexRateLimitsSnapshot(
+            credits: nil,
+            limitId: "codex",
+            limitName: "Codex",
+            planType: .pro,
+            primary: CodexRateLimitWindow(
+                resetsAt: 1_741_171_240,
+                usedPercent: 12,
+                windowDurationMins: nil
+            ),
+            secondary: CodexRateLimitWindow(
+                resetsAt: 1_741_731_200,
+                usedPercent: 41,
+                windowDurationMins: nil
+            )
+        )
+
+        let cards = RateLimitStore.makeCards(from: snapshot)
+
+        let primaryCard = cards.first { $0.usedPercent == 12 }
+        let secondaryCard = cards.first { $0.usedPercent == 41 }
+
+        XCTAssertEqual(primaryCard?.compactLabel, "5h")
+        XCTAssertEqual(primaryCard?.title, "5h")
+        XCTAssertEqual(secondaryCard?.compactLabel, "Weekly")
+        XCTAssertEqual(secondaryCard?.title, "Weekly")
+    }
+
+    func testMakeCardsUsesDurationWhenTwoWeekWindowIsSecondary() {
+        let snapshot = CodexRateLimitsSnapshot(
+            credits: nil,
+            limitId: "codex",
+            limitName: "Codex",
+            planType: .pro,
+            primary: CodexRateLimitWindow(
+                resetsAt: 1_741_171_240,
+                usedPercent: 12,
+                windowDurationMins: 300
+            ),
+            secondary: CodexRateLimitWindow(
+                resetsAt: 1_742_336_000,
+                usedPercent: 41,
+                windowDurationMins: 20_160
+            )
+        )
+
+        let cards = RateLimitStore.makeCards(from: snapshot)
+        let secondaryCard = cards.first { $0.usedPercent == 41 }
+
+        XCTAssertEqual(secondaryCard?.compactLabel, "2 Week")
+        XCTAssertEqual(secondaryCard?.title, "2 Week")
     }
 
     func testMakeCardsKeepsNonCodexFormatterLabels() {

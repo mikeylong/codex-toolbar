@@ -15,12 +15,12 @@ final class CodexAppServerClientTests: XCTestCase {
         XCTAssertEqual(
             candidates.prefix(6),
             [
-                "/Applications/ChatGPT.app/Contents/Resources/codex",
-                "/Users/example/Applications/ChatGPT.app/Contents/Resources/codex",
-                "/Applications/Codex.app/Contents/Resources/codex",
-                "/Users/example/Applications/Codex.app/Contents/Resources/codex",
                 "/usr/bin/codex",
-                "/bin/codex"
+                "/bin/codex",
+                "/Users/example/.local/bin/codex",
+                "/opt/homebrew/bin/codex",
+                "/usr/local/bin/codex",
+                "/Applications/ChatGPT.app/Contents/Resources/codex"
             ]
         )
         XCTAssertTrue(candidates.contains("/Applications/ChatGPT.app/Contents/Resources/codex"))
@@ -30,6 +30,18 @@ final class CodexAppServerClientTests: XCTestCase {
         XCTAssertTrue(candidates.contains("/Users/example/.local/bin/codex"))
         XCTAssertTrue(candidates.contains("/opt/homebrew/bin/codex"))
         XCTAssertTrue(candidates.contains("/usr/local/bin/codex"))
+    }
+
+    func testCodexPathCandidatesPreferInstalledCLIOverAppBundleExecutables() throws {
+        let candidates = CodexAppServerClient.codexPathCandidates(
+            environmentPath: "/Applications/ChatGPT.app/Contents/Resources:/opt/homebrew/bin",
+            homeDirectory: "/Users/example"
+        )
+
+        XCTAssertLessThan(
+            try XCTUnwrap(candidates.firstIndex(of: "/opt/homebrew/bin/codex")),
+            try XCTUnwrap(candidates.firstIndex(of: "/Applications/ChatGPT.app/Contents/Resources/codex"))
+        )
     }
 
     func testCodexPathCandidatesDeduplicateEntries() {
