@@ -340,6 +340,7 @@ private struct RateLimitProjectionView: View {
         VStack(alignment: .leading, spacing: 3) {
             RateLimitProjectionSparkline(projection: projection, palette: palette)
                 .frame(height: 31)
+                .zIndex(1)
 
             Text(projection.detailText)
                 .font(.body)
@@ -364,61 +365,65 @@ private struct RateLimitProjectionSparkline: View {
     let projection: RateLimitProjectionViewData
     let palette: StatusMenuPalette
 
+    @State private var hoverTarget: RateLimitProjectionGraphLayout.HoverTarget?
+
     var body: some View {
         GeometryReader { geometry in
-            let width = geometry.size.width
-            let height = geometry.size.height
-            let horizontalInset: CGFloat = 2
-            let verticalInset: CGFloat = 2
-            let chartWidth = max(width - horizontalInset * 2, 1)
-            let chartHeight = max(height - verticalInset * 2, 1)
-            let topY = verticalInset
-            let bottomY = verticalInset + chartHeight
-            let startPoint = CGPoint(x: horizontalInset, y: topY)
-            let currentPoint = point(
-                xPosition: projection.currentPosition,
-                remainingPercent: projection.currentRemainingPercent,
-                horizontalInset: horizontalInset,
-                chartWidth: chartWidth,
-                topY: topY,
-                chartHeight: chartHeight
-            )
-            let emptyPoint = CGPoint(
-                x: horizontalInset + chartWidth * CGFloat(projection.projectedEmptyPosition),
-                y: bottomY
-            )
-            let resetX = horizontalInset + chartWidth * CGFloat(projection.resetPosition)
+            let layout = RateLimitProjectionGraphLayout(size: geometry.size, projection: projection)
 
             ZStack(alignment: .topLeading) {
                 Path { path in
-                    path.move(to: CGPoint(x: horizontalInset, y: bottomY))
-                    path.addLine(to: CGPoint(x: width - horizontalInset, y: bottomY))
+                    path.move(to: CGPoint(x: layout.horizontalInset, y: layout.bottomY))
+                    path.addLine(to: CGPoint(x: geometry.size.width - layout.horizontalInset, y: layout.bottomY))
                 }
                 .stroke(palette.divider.opacity(0.55), lineWidth: 0.75)
 
                 Path { path in
-                    path.move(to: CGPoint(x: resetX, y: topY))
-                    path.addLine(to: CGPoint(x: resetX, y: bottomY))
+                    path.move(to: CGPoint(x: layout.resetX, y: layout.topY))
+                    path.addLine(to: CGPoint(x: layout.resetX, y: layout.bottomY))
                 }
                 .stroke(palette.secondaryText.opacity(0.48), style: StrokeStyle(lineWidth: 0.75, dash: [2, 2]))
 
                 Path { path in
-                    path.move(to: startPoint)
-                    path.addLine(to: currentPoint)
-                    path.addLine(to: emptyPoint)
+                    path.move(to: layout.startPoint)
+                    path.addLine(to: layout.currentPoint)
+                    path.addLine(to: layout.emptyPoint)
                 }
                 .stroke(statusColor, style: StrokeStyle(lineWidth: 1.25, lineCap: .round, lineJoin: .round))
 
                 Circle()
                     .fill(statusColor)
                     .frame(width: 4, height: 4)
-                    .position(currentPoint)
+                    .position(layout.currentPoint)
 
                 Circle()
                     .stroke(statusColor, lineWidth: 1.25)
                     .frame(width: 5, height: 5)
-                    .position(emptyPoint)
+                    .position(layout.emptyPoint)
+
+                if let hoverTarget {
+                    RateLimitProjectionTooltip(
+                        text: projection.tooltipText(for: hoverTarget.element),
+                        palette: palette
+                    )
+                    .position(layout.tooltipPosition(for: hoverTarget))
+                    .allowsHitTesting(false)
+                    .zIndex(1)
+                }
             }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .contentShape(Rectangle())
+            .onContinuousHover { phase in
+                switch phase {
+                case let .active(location):
+                    hoverTarget = layout.hoverTarget(at: location)
+                case .ended:
+                    hoverTarget = nil
+                }
+            }
+        }
+        .onDisappear {
+            hoverTarget = nil
         }
         .accessibilityHidden(true)
     }
@@ -427,19 +432,137 @@ private struct RateLimitProjectionSparkline: View {
         projectionColor(for: projection.state, palette: palette)
     }
 
-    private func point(
-        xPosition: Double,
-        remainingPercent: Int,
-        horizontalInset: CGFloat,
-        chartWidth: CGFloat,
-        topY: CGFloat,
-        chartHeight: CGFloat
-    ) -> CGPoint {
-        let remainingRatio = min(max(CGFloat(remainingPercent) / 100, 0), 1)
-        return CGPoint(
-            x: horizontalInset + chartWidth * CGFloat(xPosition),
+}
+
+struct RateLimitProjectionGraphLayout {
+    struct HoverTarget: Equatable {
+        let element: RateLimitProjectionGraphElement
+        let anchor: CGPoint
+    }
+
+    let size: CGSize
+    let horizontalInset: CGFloat = 2
+    let verticalInset: CGFloat = 2
+    let chartWidth: CGFloat
+    let chartHeight: CGFloat
+    let topY: CGFloat
+    let bottomY: CGFloat
+    let startPoint: CGPoint
+    let currentPoint: CGPoint
+    let emptyPoint: CGPoint
+    let resetX: CGFloat
+
+    init(size: CGSize, projection: RateLimitProjectionViewData) {
+        self.size = size
+        chartWidth = max(size.width - horizontalInset * 2, 1)
+        chartHeight = max(size.height - verticalInset * 2, 1)
+        topY = verticalInset
+        bottomY = verticalInset + chartHeight
+        startPoint = CGPoint(x: horizontalInset, y: topY)
+
+        let remainingRatio = min(max(CGFloat(projection.currentRemainingPercent) / 100, 0), 1)
+        currentPoint = CGPoint(
+            x: horizontalInset + chartWidth * CGFloat(projection.currentPosition),
             y: topY + chartHeight * (1 - remainingRatio)
         )
+        emptyPoint = CGPoint(
+            x: horizontalInset + chartWidth * CGFloat(projection.projectedEmptyPosition),
+            y: bottomY
+        )
+        resetX = horizontalInset + chartWidth * CGFloat(projection.resetPosition)
+    }
+
+    func hoverTarget(at location: CGPoint) -> HoverTarget? {
+        if distance(from: currentPoint, to: emptyPoint) <= 1,
+           distance(from: location, to: currentPoint) <= 9
+        {
+            return HoverTarget(element: .currentAndProjectedEmpty, anchor: currentPoint)
+        }
+
+        let pointTargets = [
+            HoverTarget(element: .current, anchor: currentPoint),
+            HoverTarget(element: .projectedEmpty, anchor: emptyPoint)
+        ]
+        if let closestPointTarget = pointTargets.min(by: {
+            distance(from: location, to: $0.anchor) < distance(from: location, to: $1.anchor)
+        }), distance(from: location, to: closestPointTarget.anchor) <= 9 {
+            return closestPointTarget
+        }
+
+        if abs(location.x - resetX) <= 6 {
+            return HoverTarget(
+                element: .reset,
+                anchor: CGPoint(x: resetX, y: min(max(location.y, topY), bottomY))
+            )
+        }
+
+        let paceAnchors = [
+            closestPoint(onLineFrom: startPoint, to: currentPoint, to: location),
+            closestPoint(onLineFrom: currentPoint, to: emptyPoint, to: location)
+        ]
+        if let closestPaceAnchor = paceAnchors.min(by: {
+            distance(from: location, to: $0) < distance(from: location, to: $1)
+        }), distance(from: location, to: closestPaceAnchor) <= 7 {
+            return HoverTarget(element: .pace, anchor: closestPaceAnchor)
+        }
+
+        return nil
+    }
+
+    func tooltipPosition(for target: HoverTarget) -> CGPoint {
+        let horizontalLimit = min(size.width / 2, 118)
+        let x = min(max(target.anchor.x, horizontalLimit), size.width - horizontalLimit)
+        let y = target.anchor.y > size.height / 2 ? topY - 13 : bottomY + 13
+        return CGPoint(x: x, y: y)
+    }
+
+    private func closestPoint(onLineFrom start: CGPoint, to end: CGPoint, to point: CGPoint) -> CGPoint {
+        let deltaX = end.x - start.x
+        let deltaY = end.y - start.y
+        let lengthSquared = deltaX * deltaX + deltaY * deltaY
+        guard lengthSquared > 0 else {
+            return start
+        }
+
+        let projectedPosition = ((point.x - start.x) * deltaX + (point.y - start.y) * deltaY) / lengthSquared
+        let clampedPosition = min(max(projectedPosition, 0), 1)
+        return CGPoint(
+            x: start.x + clampedPosition * deltaX,
+            y: start.y + clampedPosition * deltaY
+        )
+    }
+
+    private func distance(from first: CGPoint, to second: CGPoint) -> CGFloat {
+        let deltaX = first.x - second.x
+        let deltaY = first.y - second.y
+        return sqrt(deltaX * deltaX + deltaY * deltaY)
+    }
+}
+
+private struct RateLimitProjectionTooltip: View {
+    let text: String
+    let palette: StatusMenuPalette
+
+    var body: some View {
+        Text(text)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(palette.primaryText)
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 220)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(palette.surface ?? Color(nsColor: .windowBackgroundColor))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(palette.divider, lineWidth: 0.75)
+                    }
+            }
+            .shadow(color: .black.opacity(0.18), radius: 3, y: 1)
+            .accessibilityHidden(true)
     }
 }
 

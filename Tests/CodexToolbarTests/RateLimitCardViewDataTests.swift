@@ -65,8 +65,17 @@ final class RateLimitCardViewDataTests: XCTestCase {
         XCTAssertEqual(projection.currentPosition, 0.25, accuracy: 0.001)
         XCTAssertEqual(projection.resetPosition, 0.875, accuracy: 0.001)
         XCTAssertEqual(projection.projectedEmptyPosition, 1.0, accuracy: 0.001)
+        XCTAssertEqual(projection.paceTooltipText, "Current pace · 12.5% used per day")
+        XCTAssertEqual(projection.currentTooltipText, "Now · 75% remaining")
+        XCTAssertEqual(projection.resetTooltipText, "Reset · May 18")
+        XCTAssertEqual(projection.projectedEmptyTooltipText, "Projected empty · May 19 at current pace")
+        XCTAssertEqual(projection.tooltipText(for: .pace), projection.paceTooltipText)
+        XCTAssertEqual(projection.tooltipText(for: .current), projection.currentTooltipText)
+        XCTAssertEqual(projection.tooltipText(for: .reset), projection.resetTooltipText)
+        XCTAssertEqual(projection.tooltipText(for: .projectedEmpty), projection.projectedEmptyTooltipText)
         XCTAssertTrue(card.accessibilityLabel.contains("Reset comes first"))
         XCTAssertTrue(card.accessibilityLabel.contains("On pace to last through reset"))
+        XCTAssertTrue(card.accessibilityLabel.contains(projection.paceTooltipText))
         XCTAssertTrue(projection.accessibilityLabel.contains("Weekly pace"))
     }
 
@@ -84,7 +93,43 @@ final class RateLimitCardViewDataTests: XCTestCase {
         XCTAssertEqual(projection.currentPosition, 0.1, accuracy: 0.001)
         XCTAssertEqual(projection.resetPosition, 0.5, accuracy: 0.001)
         XCTAssertEqual(projection.projectedEmptyPosition, 1.0, accuracy: 0.001)
+        XCTAssertEqual(projection.paceTooltipText, "Current pace · 10% used per hour")
+        XCTAssertEqual(projection.currentTooltipText, "Now · 90% remaining")
+        XCTAssertEqual(projection.resetTooltipText, "Reset · 4:00 PM")
+        XCTAssertEqual(projection.projectedEmptyTooltipText, "Projected empty · 9:00 PM at current pace")
         XCTAssertTrue(projection.accessibilityLabel.contains("5h pace"))
+    }
+
+    func testProjectionGraphLayoutTargetsMarkersResetAndPaceWithoutTargetingBaseline() throws {
+        let now = makeDate(year: 2026, month: 5, day: 13, hour: 12, minute: 0)
+        let reset = makeDate(year: 2026, month: 5, day: 18, hour: 12, minute: 0)
+        let projection = try XCTUnwrap(makeWeeklyCard(usedPercent: 25, reset: reset, now: now).projection)
+        let layout = RateLimitProjectionGraphLayout(
+            size: CGSize(width: 320, height: 31),
+            projection: projection
+        )
+
+        XCTAssertEqual(layout.hoverTarget(at: layout.currentPoint)?.element, .current)
+        XCTAssertEqual(
+            layout.hoverTarget(at: CGPoint(x: layout.currentPoint.x + 8, y: layout.currentPoint.y))?.element,
+            .current
+        )
+        let emptyTarget = try XCTUnwrap(layout.hoverTarget(at: layout.emptyPoint))
+        XCTAssertEqual(emptyTarget.element, .projectedEmpty)
+        XCTAssertEqual(layout.tooltipPosition(for: emptyTarget).x, 202, accuracy: 0.001)
+        XCTAssertEqual(
+            layout.hoverTarget(at: CGPoint(x: layout.resetX, y: layout.topY))?.element,
+            .reset
+        )
+
+        let pacePoint = CGPoint(
+            x: (layout.startPoint.x + layout.currentPoint.x) / 2,
+            y: (layout.startPoint.y + layout.currentPoint.y) / 2
+        )
+        XCTAssertEqual(layout.hoverTarget(at: pacePoint)?.element, .pace)
+
+        let baselinePoint = CGPoint(x: layout.horizontalInset + 20, y: layout.bottomY)
+        XCTAssertNil(layout.hoverTarget(at: baselinePoint))
     }
 
     func testFiveHourProjectionIsCriticalWhenProjectedEmptyFallsBeforeReset() throws {
@@ -135,6 +180,14 @@ final class RateLimitCardViewDataTests: XCTestCase {
         XCTAssertEqual(projection.state, .critical)
         XCTAssertEqual(projection.currentRemainingPercent, 0)
         XCTAssertEqual(projection.projectedEmptyDate, now)
+
+        let layout = RateLimitProjectionGraphLayout(
+            size: CGSize(width: 320, height: 31),
+            projection: projection
+        )
+        let target = try XCTUnwrap(layout.hoverTarget(at: layout.currentPoint))
+        XCTAssertEqual(target.element, .currentAndProjectedEmpty)
+        XCTAssertEqual(projection.tooltipText(for: target.element), "Now · 0% remaining · projected empty")
     }
 
     func testProjectionIsHiddenWhenInputsAreUnavailable() {

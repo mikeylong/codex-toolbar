@@ -381,26 +381,31 @@ actor CodexAppServerClient: CodexRateLimitClient {
     }
 
     nonisolated static func codexPathCandidates(environmentPath: String, homeDirectory: String) -> [String] {
-        let preferredAppCandidates = [
-            "/Applications/ChatGPT.app/Contents/Resources/codex",
-            URL(fileURLWithPath: homeDirectory).appendingPathComponent("Applications/ChatGPT.app/Contents/Resources/codex").path,
-            "/Applications/Codex.app/Contents/Resources/codex",
-            URL(fileURLWithPath: homeDirectory).appendingPathComponent("Applications/Codex.app/Contents/Resources/codex").path
-        ]
-
         let pathCandidates = environmentPath.split(separator: ":").map { pathComponent in
             URL(fileURLWithPath: String(pathComponent)).appendingPathComponent("codex").path
         }
 
-        let fallbackCandidates = [
+        let installedCLICandidates = [
             URL(fileURLWithPath: homeDirectory).appendingPathComponent(".local/bin/codex").path,
             "/opt/homebrew/bin/codex",
             "/usr/local/bin/codex",
             "/usr/bin/codex"
         ]
 
+        // Prefer a user-installed CLI. Executables inside another app's bundle are
+        // private implementation details and may be replaced or quarantined when
+        // that app updates, so only use them when no standalone CLI is available.
+        let appBundleCandidates = [
+            "/Applications/ChatGPT.app/Contents/Resources/codex",
+            URL(fileURLWithPath: homeDirectory).appendingPathComponent("Applications/ChatGPT.app/Contents/Resources/codex").path,
+            "/Applications/Codex.app/Contents/Resources/codex",
+            URL(fileURLWithPath: homeDirectory).appendingPathComponent("Applications/Codex.app/Contents/Resources/codex").path
+        ]
+        let appBundleCandidateSet = Set(appBundleCandidates)
+        let standalonePathCandidates = pathCandidates.filter { !appBundleCandidateSet.contains($0) }
+
         var seen = Set<String>()
-        let orderedCandidates = preferredAppCandidates + pathCandidates + fallbackCandidates
+        let orderedCandidates = standalonePathCandidates + installedCLICandidates + appBundleCandidates
 
         return orderedCandidates.filter { candidate in
             seen.insert(candidate).inserted
