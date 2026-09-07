@@ -18,6 +18,8 @@ for appearance in light dark; do
 done
 
 generated_files+=(
+  "$SCREENSHOTS_DIR/website-light-popover.png"
+  "$SCREENSHOTS_DIR/website-dark-popover.png"
   "$SCREENSHOTS_DIR/normal-light-status-item.png"
   "$SCREENSHOTS_DIR/critical-dark-status-item.png"
 )
@@ -70,7 +72,8 @@ for scenario in "${README_SCENARIOS[@]}"; do
 done
 
 for appearance in light dark; do
-  cp "$SCREENSHOTS_DIR/projection-$appearance-popover.png" \
+  run_capture "website" "$appearance"
+  cp "$SCREENSHOTS_DIR/website-$appearance-popover.png" \
     "$ROOT_DIR/site/assets/codextoolbar-tahoe-$appearance.png"
 done
 

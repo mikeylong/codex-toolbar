@@ -12,6 +12,18 @@ final class ScreenshotScenarioTests: XCTestCase {
         }
     }
 
+    func testWebsiteScenarioShowsSameDayResetWithoutCalendarDate() throws {
+        let scenario = try XCTUnwrap(ScreenshotScenario.named("website"))
+        let cards = RateLimitStore.makeCards(
+            from: scenario.snapshot, now: scenario.now,
+            calendar: scenario.calendar, locale: scenario.locale, timeZone: scenario.timeZone
+        )
+        XCTAssertEqual(cards.map(\.title), ["Weekly"])
+        let card = try XCTUnwrap(cards.first)
+        XCTAssertEqual(card.combinedResetText, "Resets in 4h (4:00 PM)")
+        XCTAssertEqual(card.projection?.detailText, "On pace to last through reset")
+    }
+
     func testWarningScenarioMapsToExpectedCardStates() throws {
         let scenario = try XCTUnwrap(ScreenshotScenario.named("warning"))
 
