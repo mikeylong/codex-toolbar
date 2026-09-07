@@ -79,6 +79,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: codexPath)
         process.arguments = ["app-server", "--listen", "stdio://"]
+        process.environment = Self.environmentForCodex(executablePath: codexPath)
 
         let stdinPipe = Pipe()
         let stdoutPipe = Pipe()
@@ -176,6 +177,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: codexPath)
         process.arguments = ["app-server", "--listen", "stdio://"]
+        process.environment = Self.environmentForCodex(executablePath: codexPath)
 
         let stdinPipe = Pipe()
         let stdoutPipe = Pipe()
@@ -385,6 +387,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
             URL(fileURLWithPath: String(pathComponent)).appendingPathComponent("codex").path
         }
 
+        let nvmCLICandidates = nvmCodexPathCandidates(homeDirectory: homeDirectory)
         let installedCLICandidates = [
             URL(fileURLWithPath: homeDirectory).appendingPathComponent(".local/bin/codex").path,
             "/opt/homebrew/bin/codex",
@@ -405,11 +408,38 @@ actor CodexAppServerClient: CodexRateLimitClient {
         let standalonePathCandidates = pathCandidates.filter { !appBundleCandidateSet.contains($0) }
 
         var seen = Set<String>()
-        let orderedCandidates = standalonePathCandidates + installedCLICandidates + appBundleCandidates
+        let orderedCandidates = standalonePathCandidates + nvmCLICandidates + installedCLICandidates + appBundleCandidates
 
         return orderedCandidates.filter { candidate in
             seen.insert(candidate).inserted
         }
+    }
+
+    nonisolated static func environmentForCodex(
+        executablePath: String,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> [String: String] {
+        var environment = environment
+        let executableDirectory = URL(fileURLWithPath: executablePath).deletingLastPathComponent().path
+        let existingPath = environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
+        environment["PATH"] = "\(executableDirectory):\(existingPath)"
+        return environment
+    }
+
+    private nonisolated static func nvmCodexPathCandidates(homeDirectory: String) -> [String] {
+        let versionsDirectory = URL(fileURLWithPath: homeDirectory)
+            .appendingPathComponent(".nvm/versions/node", isDirectory: true)
+        guard let versions = try? FileManager.default.contentsOfDirectory(
+            at: versionsDirectory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        return versions
+            .sorted { $0.lastPathComponent.compare($1.lastPathComponent, options: .numeric) == .orderedDescending }
+            .map { $0.appendingPathComponent("bin/codex").path }
     }
 
     nonisolated static func parseLoginStatus(
@@ -451,6 +481,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executablePath)
         process.arguments = arguments
+        process.environment = environmentForCodex(executablePath: executablePath)
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
