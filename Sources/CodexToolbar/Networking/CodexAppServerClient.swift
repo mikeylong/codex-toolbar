@@ -461,12 +461,12 @@ actor CodexAppServerClient: CodexRateLimitClient {
             .filter { !$0.isEmpty }
             .joined(separator: "\n")
 
-        let lowercased = combined.lowercased()
-        if lowercased.contains("not logged in")
-            || lowercased.contains("operation not permitted")
-            || lowercased.contains("permission denied")
-            || lowercased.contains("os error 1")
-        {
+        // Only an explicit login-status result establishes that the user is
+        // signed out. Access failures cannot tell us whether credentials exist.
+        let reportsLoggedOut = combined.split(whereSeparator: \.isNewline).contains {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "not logged in"
+        }
+        if reportsLoggedOut {
             return .loggedOut
         }
 

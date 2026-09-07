@@ -909,6 +909,57 @@ final class RateLimitStoreTests: XCTestCase {
         XCTAssertEqual(client.loadSnapshotCallCount, 2)
     }
 
+    func testManualRefreshPermissionFailureDoesNotReportSignInOrDiscardCards() async {
+        let client = FakeCodexRateLimitClient()
+        let permissionStatus = CodexAppServerClient.parseLoginStatus(
+            exitStatus: 1, stdout: "",
+            stderr: "Error checking login status: Permission denied (os error 13)",
+            timedOut: false
+        )
+        client.loginStatusResults = [.success(.loggedIn), .success(permissionStatus)]
+        let store = RateLimitStore(client: client, reconnectDelayNanoseconds: 10_000_000_000,
+                                   refreshDelayNanosecondsProvider: { 10_000_000_000 })
+        await store.start()
+        let initialRemaining = store.cards.map(\.remainingPercent)
+        await store.refreshNow()
+
+        XCTAssertEqual(client.loadSnapshotCallCount, 2)
+        XCTAssertEqual(store.state, .ready)
+        XCTAssertEqual(store.cards.map(\.remainingPercent), initialRemaining)
+        XCTAssertNil(store.staleMessage)
+        await store.stop()
+    }
+
+    func testTimeoutWithPermissionFailurePreservesStaleDataAndRecovers() async {
+        let client = FakeCodexRateLimitClient()
+        let permissionStatus = CodexAppServerClient.parseLoginStatus(
+            exitStatus: 1, stdout: "",
+            stderr: "Error checking login status: Operation not permitted (os error 1)",
+            timedOut: false
+        )
+        client.loginStatusResults = [.success(.loggedIn), .success(.loggedIn), .success(permissionStatus)]
+        let store = RateLimitStore(client: client, reconnectDelayNanoseconds: 10_000_000_000,
+                                   refreshDelayNanosecondsProvider: { 10_000_000_000 })
+        await store.start()
+        let initialCards = store.cards
+        let initialLastUpdated = store.lastUpdated
+        let timeoutMessage = "Timed out reading Codex rate limits."
+        client.loadSnapshotError = CodexAppServerError.serverError(timeoutMessage)
+        await store.refreshNow()
+
+        XCTAssertEqual(store.state, .error(timeoutMessage))
+        XCTAssertEqual(store.statusBarAccessibilityText, timeoutMessage)
+        XCTAssertEqual(store.staleMessage, timeoutMessage)
+        XCTAssertEqual(store.cards, initialCards)
+        XCTAssertEqual(store.lastUpdated, initialLastUpdated)
+
+        client.loadSnapshotError = nil
+        await store.refreshNow()
+        XCTAssertEqual(store.state, .ready)
+        XCTAssertNil(store.staleMessage)
+        await store.stop()
+    }
+
     func testStartupIgnoresRequiresOpenaiAuthWhenAccountIsPresent() async {
         let client = FakeCodexRateLimitClient()
         client.accountResponse = GetAccountResponse(
