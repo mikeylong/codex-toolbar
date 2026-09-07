@@ -57,7 +57,7 @@ That quits `CodexToolbar` if it is running, removes its launch-at-login registra
 
 ## Screenshots
 
-Captured from v0.1.18 with fixed sample values. The default examples show a Weekly Codex window; the optional Spark example adds separately labeled 5h and Weekly windows. Available windows depend on what Codex reports for your account. The website uses the same Weekly projection screenshots.
+Captured from v0.1.18 with fixed sample values. The default examples show a Weekly Codex window; the optional Spark example adds separately labeled 5h and Weekly windows. Available windows depend on what Codex reports for your account. The website uses a separate Weekly scenario with a same-day reset so the image shows relative timing instead of a calendar date.
 
 | Theme | Normal | Warning | Critical | Projection |
 | --- | --- | --- | --- | --- |
