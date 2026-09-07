@@ -4,6 +4,14 @@ import XCTest
 
 @MainActor
 final class ScreenshotScenarioTests: XCTestCase {
+    func testPublishedDefaultScenariosContainOnlyWeeklyCodexWindow() {
+        for scenario in [ScreenshotScenario.normal, .warning, .critical, .projection] {
+            XCTAssertEqual(scenario.snapshot.primary?.windowDurationMins, 10080, scenario.name)
+            XCTAssertNil(scenario.snapshot.secondary, scenario.name)
+            XCTAssertNil(scenario.rateLimitsByLimitId, scenario.name)
+        }
+    }
+
     func testWarningScenarioMapsToExpectedCardStates() throws {
         let scenario = try XCTUnwrap(ScreenshotScenario.named("warning"))
 
@@ -15,12 +23,12 @@ final class ScreenshotScenarioTests: XCTestCase {
             timeZone: scenario.timeZone
         )
 
-        XCTAssertEqual(cards.count, 2)
-        XCTAssertEqual(cards[0].title, "5h")
+        XCTAssertEqual(cards.count, 1)
+        XCTAssertEqual(cards[0].title, "Weekly")
         XCTAssertEqual(cards[0].progressState, .warning)
         XCTAssertEqual(cards[0].usageText, "74% used · 26% remaining")
-        XCTAssertEqual(cards[0].combinedResetText, "Resets in 35m (2:46 PM)")
-        XCTAssertEqual(cards[1].progressState, .normal)
+        XCTAssertNil(scenario.snapshot.secondary)
+        XCTAssertEqual(scenario.snapshot.primary?.windowDurationMins, 10080)
     }
 
     func testScreenshotModeBuildsFixtureStoreWithoutLiveFetching() async {
@@ -36,7 +44,7 @@ final class ScreenshotScenarioTests: XCTestCase {
         XCTAssertEqual(client.loadSnapshotCallCount, 0)
         XCTAssertEqual(store.state, .ready)
         XCTAssertEqual(store.cards.first?.usageText, "19% used · 81% remaining")
-        XCTAssertEqual(store.statusBarText, "5h: Open")
+        XCTAssertEqual(store.statusBarText, "Week: Open")
         XCTAssertEqual(
             store.statusItemPresentation,
             .bar(.init(remainingPercent: 81, progressState: .normal))
@@ -66,7 +74,7 @@ final class ScreenshotScenarioTests: XCTestCase {
         XCTAssertEqual(store.lastUpdated, ScreenshotScenario.multiweek.lastUpdated)
     }
 
-    func testProjectionScenarioBuildsFiveHourAndWeeklyResetRiskChartData() throws {
+    func testProjectionScenarioBuildsWeeklyResetRiskChartData() throws {
         let scenario = try XCTUnwrap(ScreenshotScenario.named("projection"))
         let cards = RateLimitStore.makeCards(
             from: scenario.snapshot,
@@ -75,17 +83,10 @@ final class ScreenshotScenarioTests: XCTestCase {
             locale: scenario.locale,
             timeZone: scenario.timeZone
         )
-        let fiveHourCard = try XCTUnwrap(cards.first { $0.title == "5h" })
-        let fiveHourProjection = try XCTUnwrap(fiveHourCard.projection)
-        let weeklyCard = try XCTUnwrap(cards.first { $0.title == "Weekly" })
-        let weeklyProjection = try XCTUnwrap(weeklyCard.projection)
-
-        XCTAssertEqual(fiveHourProjection.state, .critical)
-        XCTAssertEqual(fiveHourProjection.summaryText, "Projected empty before reset")
-        XCTAssertEqual(fiveHourProjection.detailText, "Empty 2:26 PM at pace")
-        XCTAssertEqual(weeklyProjection.state, .resetFirst)
-        XCTAssertEqual(weeklyProjection.summaryText, "Reset comes first")
-        XCTAssertEqual(weeklyProjection.detailText, "On pace to last through reset")
+        XCTAssertEqual(cards.map(\.title), ["Weekly"])
+        let weeklyProjection = try XCTUnwrap(cards.first?.projection)
+        XCTAssertEqual(weeklyProjection.state, .warning)
+        XCTAssertEqual(weeklyProjection.summaryText, "Projected empty before reset")
     }
 
     func testSparkScenarioBuildsFamilySectionsWithCodexFirst() throws {
@@ -99,13 +100,13 @@ final class ScreenshotScenarioTests: XCTestCase {
         )
         let sections = RateLimitStore.makeCardSections(from: cards)
 
-        XCTAssertEqual(cards.count, 4)
+        XCTAssertEqual(cards.count, 3)
         XCTAssertEqual(cards.first?.displayTitle, "GPT-5.3-Codex-Spark · 5h")
         XCTAssertEqual(sections.map(\.familyId), ["codex", "codex_bengalfox"])
         XCTAssertEqual(sections.map(\.title), [nil, "GPT-5.3-Codex-Spark limit"])
         XCTAssertEqual(sections.map(\.showsTitle), [false, true])
-        XCTAssertEqual(sections[0].cards.map(\.title), ["5h", "Weekly"])
-        XCTAssertEqual(sections[1].cards.map(\.title), ["5h", "2 Week"])
+        XCTAssertEqual(sections[0].cards.map(\.title), ["Weekly"])
+        XCTAssertEqual(sections[1].cards.map(\.title), ["5h", "Weekly"])
     }
 
     func testSparkScenarioBuildsStoreFromLaunchWithoutLiveFetching() async {

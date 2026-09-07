@@ -78,12 +78,12 @@ struct ScreenshotScenario: Equatable, Sendable {
         ))!
     }
 
+    // Screenshot fixtures mirror the observed window structure: Codex has a
+    // weekly primary window; Spark has separate 5h and weekly windows.
     private static func snapshot(
-        primaryUsed: Int,
-        primaryReset: Date,
-        secondaryUsed: Int,
-        secondaryReset: Date,
-        secondaryDurationMinutes: Int = 10080
+        used: Int,
+        reset: Date,
+        durationMinutes: Int = 10080
     ) -> CodexRateLimitsSnapshot {
         CodexRateLimitsSnapshot(
             credits: nil,
@@ -91,25 +91,20 @@ struct ScreenshotScenario: Equatable, Sendable {
             limitName: "Codex",
             planType: .pro,
             primary: CodexRateLimitWindow(
-                resetsAt: Int64(primaryReset.timeIntervalSince1970),
-                usedPercent: primaryUsed,
-                windowDurationMins: 300
+                resetsAt: Int64(reset.timeIntervalSince1970),
+                usedPercent: used,
+                windowDurationMins: durationMinutes
             ),
-            secondary: CodexRateLimitWindow(
-                resetsAt: Int64(secondaryReset.timeIntervalSince1970),
-                usedPercent: secondaryUsed,
-                windowDurationMins: secondaryDurationMinutes
-            )
+            secondary: nil
         )
     }
 
     static let normal: ScreenshotScenario = {
         let now = date(year: 2026, month: 3, day: 8, hour: 13, minute: 3)
-        let primaryReset = date(year: 2026, month: 3, day: 8, hour: 13, minute: 54)
         let secondaryReset = date(year: 2026, month: 3, day: 11, hour: 0, minute: 0)
         return ScreenshotScenario(
             name: "normal",
-            snapshot: snapshot(primaryUsed: 19, primaryReset: primaryReset, secondaryUsed: 10, secondaryReset: secondaryReset),
+            snapshot: snapshot(used: 19, reset: secondaryReset),
             rateLimitsByLimitId: nil,
             now: now,
             lastUpdated: now,
@@ -121,11 +116,10 @@ struct ScreenshotScenario: Equatable, Sendable {
 
     static let warning: ScreenshotScenario = {
         let now = date(year: 2026, month: 3, day: 8, hour: 14, minute: 11)
-        let primaryReset = date(year: 2026, month: 3, day: 8, hour: 14, minute: 46)
         let secondaryReset = date(year: 2026, month: 3, day: 11, hour: 0, minute: 0)
         return ScreenshotScenario(
             name: "warning",
-            snapshot: snapshot(primaryUsed: 74, primaryReset: primaryReset, secondaryUsed: 41, secondaryReset: secondaryReset),
+            snapshot: snapshot(used: 74, reset: secondaryReset),
             rateLimitsByLimitId: nil,
             now: now,
             lastUpdated: now,
@@ -137,11 +131,10 @@ struct ScreenshotScenario: Equatable, Sendable {
 
     static let critical: ScreenshotScenario = {
         let now = date(year: 2026, month: 3, day: 8, hour: 16, minute: 22)
-        let primaryReset = date(year: 2026, month: 3, day: 8, hour: 16, minute: 31)
         let secondaryReset = date(year: 2026, month: 3, day: 11, hour: 0, minute: 0)
         return ScreenshotScenario(
             name: "critical",
-            snapshot: snapshot(primaryUsed: 94, primaryReset: primaryReset, secondaryUsed: 84, secondaryReset: secondaryReset),
+            snapshot: snapshot(used: 94, reset: secondaryReset),
             rateLimitsByLimitId: nil,
             now: now,
             lastUpdated: now,
@@ -153,11 +146,10 @@ struct ScreenshotScenario: Equatable, Sendable {
 
     static let exhausted: ScreenshotScenario = {
         let now = date(year: 2026, month: 3, day: 8, hour: 18, minute: 5)
-        let primaryReset = date(year: 2026, month: 3, day: 8, hour: 18, minute: 5)
         let secondaryReset = date(year: 2026, month: 3, day: 11, hour: 0, minute: 0)
         return ScreenshotScenario(
             name: "exhausted",
-            snapshot: snapshot(primaryUsed: 100, primaryReset: primaryReset, secondaryUsed: 91, secondaryReset: secondaryReset),
+            snapshot: snapshot(used: 100, reset: secondaryReset),
             rateLimitsByLimitId: nil,
             now: now,
             lastUpdated: now,
@@ -169,16 +161,13 @@ struct ScreenshotScenario: Equatable, Sendable {
 
     static let multiweek: ScreenshotScenario = {
         let now = date(year: 2026, month: 3, day: 10, hour: 22, minute: 46)
-        let primaryReset = date(year: 2026, month: 3, day: 10, hour: 23, minute: 7)
         let secondaryReset = date(year: 2026, month: 3, day: 17, hour: 0, minute: 0)
         return ScreenshotScenario(
             name: "multiweek",
             snapshot: snapshot(
-                primaryUsed: 15,
-                primaryReset: primaryReset,
-                secondaryUsed: 99,
-                secondaryReset: secondaryReset,
-                secondaryDurationMinutes: 10081
+                used: 99,
+                reset: secondaryReset,
+                durationMinutes: 10081
             ),
             rateLimitsByLimitId: nil,
             now: now,
@@ -191,11 +180,10 @@ struct ScreenshotScenario: Equatable, Sendable {
 
     static let projection: ScreenshotScenario = {
         let now = date(year: 2026, month: 5, day: 13, hour: 12, minute: 0)
-        let primaryReset = date(year: 2026, month: 5, day: 13, hour: 16, minute: 0)
         let secondaryReset = date(year: 2026, month: 5, day: 18, hour: 12, minute: 0)
         return ScreenshotScenario(
             name: "projection",
-            snapshot: snapshot(primaryUsed: 29, primaryReset: primaryReset, secondaryUsed: 25, secondaryReset: secondaryReset),
+            snapshot: snapshot(used: 45, reset: secondaryReset),
             rateLimitsByLimitId: nil,
             now: now,
             lastUpdated: now,
@@ -212,7 +200,7 @@ struct ScreenshotScenario: Equatable, Sendable {
 
         return ScreenshotScenario(
             name: "spark",
-            snapshot: snapshot(primaryUsed: 40, primaryReset: primaryReset, secondaryUsed: 50, secondaryReset: secondaryReset),
+            snapshot: snapshot(used: 50, reset: secondaryReset),
             rateLimitsByLimitId: [
                 "codex_bengalfox": CodexRateLimitsSnapshot(
                     credits: nil,
@@ -227,7 +215,7 @@ struct ScreenshotScenario: Equatable, Sendable {
                     secondary: CodexRateLimitWindow(
                         resetsAt: Int64(secondaryReset.timeIntervalSince1970) + 12_000,
                         usedPercent: 15,
-                        windowDurationMins: 20_160
+                        windowDurationMins: 10_080
                     )
                 )
             ],

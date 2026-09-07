@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SCREENSHOTS_DIR="$ROOT_DIR/screenshots"
 APP_EXECUTABLE="$ROOT_DIR/dist/CodexToolbar.app/Contents/MacOS/CodexToolbar"
-README_SCENARIOS=(normal warning critical projection)
+README_SCENARIOS=(normal warning critical projection spark)
 
 "$ROOT_DIR/scripts/build_app.sh" >/dev/null
 
@@ -35,6 +35,7 @@ run_capture() {
   local appearance="$2"
   local capture_status_item="${3:-false}"
 
+  CODEX_TOOLBAR_SCREENSHOT_VISIBLE_SUPPLEMENTAL_FAMILIES="codex_bengalfox" \
   CODEX_TOOLBAR_SCREENSHOT_SCENARIO="$scenario" \
   CODEX_TOOLBAR_SCREENSHOT_APPEARANCE="$appearance" \
   CODEX_TOOLBAR_SCREENSHOT_OUTPUT_DIR="$SCREENSHOTS_DIR" \
