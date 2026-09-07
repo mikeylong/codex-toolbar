@@ -53,6 +53,19 @@ final class CodexAppServerClientTests: XCTestCase {
         XCTAssertEqual(candidates.filter { $0 == "/Applications/ChatGPT.app/Contents/Resources/codex" }.count, 1)
     }
 
+    func testCodexEnvironmentPrependsExecutableDirectoryToPath() {
+        let environment = CodexAppServerClient.environmentForCodex(
+            executablePath: "/Users/example/.nvm/versions/node/v22.16.0/bin/codex",
+            environment: ["PATH": "/usr/bin:/bin", "HOME": "/Users/example"]
+        )
+
+        XCTAssertEqual(
+            environment["PATH"],
+            "/Users/example/.nvm/versions/node/v22.16.0/bin:/usr/bin:/bin"
+        )
+        XCTAssertEqual(environment["HOME"], "/Users/example")
+    }
+
     func testParseLoginStatusTreatsExitZeroAsLoggedIn() {
         let status = CodexAppServerClient.parseLoginStatus(
             exitStatus: 0,
