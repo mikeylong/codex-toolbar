@@ -762,7 +762,7 @@ final class RateLimitStoreTests: XCTestCase {
         XCTAssertEqual(store.lastUpdated, initialLastUpdated)
     }
 
-    func testManualRefreshRequestsTokenRefresh() async {
+    func testManualRefreshDoesNotForceTokenRefresh() async {
         let client = FakeCodexRateLimitClient()
         let store = RateLimitStore(
             client: client,
@@ -775,7 +775,31 @@ final class RateLimitStoreTests: XCTestCase {
 
         await store.refreshNow()
 
-        XCTAssertEqual(Array(client.readAccountRefreshTokens.dropFirst(refreshTokensBeforeManualRefresh)), [true])
+        XCTAssertEqual(Array(client.readAccountRefreshTokens.dropFirst(refreshTokensBeforeManualRefresh)), [false])
+    }
+
+    func testManualRefreshAndReconnectKeepSignedInAccountWhenForcedRefreshWouldReturnNil() async {
+        let client = FakeCodexRateLimitClient()
+        client.returnsNoAccountOnForcedRefresh = true
+        let store = RateLimitStore(
+            client: client,
+            reconnectDelayNanoseconds: 50_000_000,
+            refreshDelayNanosecondsProvider: { 10_000_000_000 }
+        )
+        await store.start()
+        XCTAssertEqual(store.state, .ready)
+
+        await store.refreshNow()
+        XCTAssertEqual(store.state, .ready)
+        XCTAssertFalse(store.cards.isEmpty)
+        XCTAssertNil(store.staleMessage)
+
+        client.emit(.disconnected("Connection interrupted."))
+        await waitUntil { client.loadSnapshotCallCount >= 3 && store.state != .connecting }
+        XCTAssertEqual(store.state, .ready)
+        XCTAssertFalse(store.cards.isEmpty)
+        XCTAssertFalse(client.readAccountRefreshTokens.contains(true))
+        await store.stop()
     }
 
     func testManualRefreshKeepsBarPresentationWhileConnectingWithCachedCards() async {
@@ -1033,6 +1057,7 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
     private(set) var readRateLimitsCallCount = 0
     private(set) var readAccountRefreshTokens: [Bool] = []
     private(set) var isLoadSnapshotPaused = false
+    var returnsNoAccountOnForcedRefresh = false
     var failReadRateLimits: Error?
     var loadSnapshotError: Error?
     var loginStatusResults: [Result<CodexLoginStatus, Error>] = []
@@ -1067,6 +1092,9 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
 
     func readAccount(refreshToken: Bool) async throws -> GetAccountResponse {
         readAccountRefreshTokens.append(refreshToken)
+        if refreshToken && returnsNoAccountOnForcedRefresh {
+            return GetAccountResponse(account: nil, requiresOpenaiAuth: true)
+        }
         return accountResponse
     }
 
