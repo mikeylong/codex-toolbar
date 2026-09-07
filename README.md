@@ -57,12 +57,18 @@ That quits `CodexToolbar` if it is running, removes its launch-at-login registra
 
 ## Screenshots
 
-Captured from v0.1.17 using fixed sample data in light and dark mode. The website uses the same projection screenshots.
+Captured from v0.1.18 with fixed sample values. The default examples show a Weekly Codex window; the optional Spark example adds separately labeled 5h and Weekly windows. Available windows depend on what Codex reports for your account. The website uses the same Weekly projection screenshots.
 
 | Theme | Normal | Warning | Critical | Projection |
 | --- | --- | --- | --- | --- |
 | Light | ![Normal light mode status popover](screenshots/readme-normal-light-popover.png) | ![Warning light mode status popover](screenshots/readme-warning-light-popover.png) | ![Critical light mode status popover](screenshots/readme-critical-light-popover.png) | ![Projection light mode status popover](screenshots/readme-projection-light-popover.png) |
 | Dark | ![Normal dark mode status popover](screenshots/readme-normal-dark-popover.png) | ![Warning dark mode status popover](screenshots/readme-warning-dark-popover.png) | ![Critical dark mode status popover](screenshots/readme-critical-dark-popover.png) | ![Projection dark mode status popover](screenshots/readme-projection-dark-popover.png) |
+
+With Spark usage enabled:
+
+| Light | Dark |
+| --- | --- |
+| ![Weekly Codex usage with separate Spark 5h and Weekly limits in light mode](screenshots/readme-spark-light-popover.png) | ![Weekly Codex usage with separate Spark 5h and Weekly limits in dark mode](screenshots/readme-spark-dark-popover.png) |
 
 ## Notes
 
