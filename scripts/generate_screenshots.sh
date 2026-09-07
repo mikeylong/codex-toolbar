@@ -68,5 +68,10 @@ for scenario in "${README_SCENARIOS[@]}"; do
   done
 done
 
+for appearance in light dark; do
+  cp "$SCREENSHOTS_DIR/projection-$appearance-popover.png" \
+    "$ROOT_DIR/site/assets/codextoolbar-tahoe-$appearance.png"
+done
+
 echo "Generated screenshots:"
 find "$SCREENSHOTS_DIR" -maxdepth 1 -name '*.png' -print | sort
