@@ -88,7 +88,7 @@ final class CodexAppServerClientTests: XCTestCase {
         XCTAssertEqual(status, .loggedOut)
     }
 
-    func testParseLoginStatusTreatsPermissionErrorsAsLoggedOut() {
+    func testParseLoginStatusTreatsPermissionErrorsAsIndeterminate() {
         let status = CodexAppServerClient.parseLoginStatus(
             exitStatus: 1,
             stdout: "",
@@ -96,7 +96,23 @@ final class CodexAppServerClientTests: XCTestCase {
             timedOut: false
         )
 
-        XCTAssertEqual(status, .loggedOut)
+        XCTAssertEqual(status, .indeterminate("Error checking login status: Operation not permitted (os error 1)"))
+    }
+
+    func testParseLoginStatusDoesNotInferLogoutFromDiagnosticText() {
+        for diagnostic in ["Permission denied", "os error 1", "Unable to determine whether user is not logged in"] {
+            XCTAssertEqual(
+                CodexAppServerClient.parseLoginStatus(exitStatus: 1, stdout: "", stderr: diagnostic, timedOut: false),
+                .indeterminate(diagnostic)
+            )
+        }
+    }
+
+    func testParseLoginStatusTimeoutDoesNotEstablishLogout() {
+        XCTAssertEqual(
+            CodexAppServerClient.parseLoginStatus(exitStatus: 1, stdout: "Not logged in", stderr: "", timedOut: true),
+            .indeterminate("Timed out checking Codex login status.")
+        )
     }
 
     func testParseLoginStatusTreatsUnknownFailuresAsIndeterminate() {
