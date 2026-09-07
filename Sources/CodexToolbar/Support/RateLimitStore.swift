@@ -222,9 +222,11 @@ final class RateLimitStore {
                 return
             }
 
-            let refreshToken = shouldRefreshAccountToken(for: source)
-            debugDetail = "Loading snapshot (refreshToken=\(refreshToken))"
-            let (account, response) = try await client.loadSnapshot(refreshToken: refreshToken)
+            // Refresh the displayed limits without forcing credential rotation.
+            // A forced token refresh can return no account even while normal
+            // account reads and rate-limit requests remain authenticated.
+            debugDetail = "Loading snapshot (refreshToken=false)"
+            let (account, response) = try await client.loadSnapshot(refreshToken: false)
             debugDetail = "Snapshot loaded"
 
             if account.account == nil {
@@ -350,15 +352,6 @@ final class RateLimitStore {
             return true
         case .timer:
             return cards.isEmpty || statusMessage == Self.signInMessage || staleMessage == Self.signInMessage
-        }
-    }
-
-    private func shouldRefreshAccountToken(for source: RefreshSource) -> Bool {
-        switch source {
-        case .manual, .reconnect:
-            return true
-        case .startup, .timer:
-            return false
         }
     }
 
