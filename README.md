@@ -57,6 +57,8 @@ That quits `CodexToolbar` if it is running, removes its launch-at-login registra
 
 ## Screenshots
 
+Captured from v0.1.17 using fixed sample data in light and dark mode. The website uses the same projection screenshots.
+
 | Theme | Normal | Warning | Critical | Projection |
 | --- | --- | --- | --- | --- |
 | Light | ![Normal light mode status popover](screenshots/readme-normal-light-popover.png) | ![Warning light mode status popover](screenshots/readme-warning-light-popover.png) | ![Critical light mode status popover](screenshots/readme-critical-light-popover.png) | ![Projection light mode status popover](screenshots/readme-projection-light-popover.png) |
