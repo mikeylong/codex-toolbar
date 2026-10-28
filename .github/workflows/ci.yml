@@ -31,6 +31,9 @@ jobs:
       - name: Run swift test
         run: swift test
 
+      - name: Test menu bar ownership repair
+        run: python3 -m unittest discover -s scripts/tests -v
+
   integration-smoke:
     name: Integration smoke test
     runs-on: macos-15
