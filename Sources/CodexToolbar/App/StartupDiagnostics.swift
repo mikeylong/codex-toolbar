@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 struct StartupDiagnosticsConfiguration: Equatable, Sendable {
     let outputPath: String
@@ -53,6 +54,10 @@ struct StartupDiagnosticsConfiguration: Equatable, Sendable {
 
 struct StartupDiagnosticsRecord: Codable, Equatable, Sendable {
     let launched: Bool
+    let processID: Int32
+    let parentProcessID: Int32
+    let bundleIdentifier: String?
+    let launchServicesHandoff: Bool
     let state: String
     let statusMessage: String
     let debugDetail: String?
@@ -64,6 +69,11 @@ struct StartupDiagnosticsRecord: Codable, Equatable, Sendable {
     @MainActor
     init(store: RateLimitStore, loginItemStatus: String, timestamp: Date = Date()) {
         launched = true
+        processID = ProcessInfo.processInfo.processIdentifier
+        parentProcessID = getppid()
+        bundleIdentifier = Bundle.main.bundleIdentifier
+        launchServicesHandoff = CommandLine.arguments.contains(AppLaunchBootstrap.handoffArgument)
+            && parentProcessID == 1
         state = Self.stateString(for: store.state)
         statusMessage = store.statusMessage
         debugDetail = store.debugDetail

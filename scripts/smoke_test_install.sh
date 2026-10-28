@@ -106,6 +106,13 @@ if not data.get("launched", False):
     print(f"Diagnostics directory: {path.rsplit('/', 1)[0]}", file=sys.stderr)
     sys.exit(1)
 
+import platform
+macos_major = int(platform.mac_ver()[0].split(".")[0])
+if macos_major >= 26 and not data.get("launchServicesHandoff", False):
+    print("Smoke test failed: UI did not start through the LaunchServices handoff", file=sys.stderr)
+    print(f"Diagnostics directory: {path.rsplit('/', 1)[0]}", file=sys.stderr)
+    sys.exit(1)
+
 if not is_valid:
     print("Smoke test failed: invalid first-run state", file=sys.stderr)
     print(json.dumps(data, indent=2, sort_keys=True), file=sys.stderr)

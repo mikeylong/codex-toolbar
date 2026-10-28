@@ -105,6 +105,7 @@ class MenuBarOwnershipTests(unittest.TestCase):
             with (
                 mock.patch("sys.argv", ["repair", "--apply", "--backup-dir", str(backup_dir)]),
                 mock.patch.object(repair, "read_preferences", side_effect=[preferences, preferences, expected]),
+                mock.patch.object(repair.platform, "mac_ver", return_value=("27.0.1", (), "arm64")),
                 mock.patch.object(repair.subprocess, "run", side_effect=check_backup_before_mutation) as run,
                 contextlib.redirect_stdout(io.StringIO()),
             ):
@@ -115,6 +116,7 @@ class MenuBarOwnershipTests(unittest.TestCase):
                     "trackedApplications", "-data", after.hex(),
                 ], check=True),
                 mock.call(["/usr/bin/killall", "ControlCenter"], check=True),
+                mock.call(["/usr/bin/killall", "MenuBarAgent"], check=True),
             ])
             self.assertEqual((backup_dir / "trackedApplications.after.plist").read_bytes(), after)
 
