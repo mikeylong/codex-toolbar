@@ -120,6 +120,16 @@ VERIFY_DMG_AFTER_BUILD=true \
 
 ## Troubleshooting
 
+If another app's **Allow in the Menu Bar** toggle hides CodexToolbar while CodexToolbar's own toggle has no effect, macOS may have cached the toolbar's menu item under the app that launched it during development. Inspect the cached ownership with:
+
+```bash
+python3 scripts/repair_menu_bar_ownership.py
+```
+
+To apply the previewed repair, run `python3 scripts/repair_menu_bar_ownership.py --apply`. This backs up the records under `dist/menu-bar-ownership/`, removes CodexToolbar's bundle reference from other apps' records, and associates it with CodexToolbar's own record. It preserves all visibility choices and unrelated references, then restarts Control Center to reload the records. The preference format is undocumented; the script refuses unfamiliar data. Check both toggles afterward in System Settings → Menu Bar.
+
+For manual testing, launch the installed app from Finder. Running its executable directly from an IDE or agent can cause macOS to associate the menu item with that host app again.
+
 If you move or rename the repo and `swift run CodexToolbar` stops compiling with an error like `PCH was compiled with module cache path ...` plus `missing required module 'SwiftShims'`, clear the stale Swift module cache and rerun:
 
 ```bash
