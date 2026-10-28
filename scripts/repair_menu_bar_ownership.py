@@ -7,6 +7,7 @@ import datetime
 import json
 import os
 from pathlib import Path
+import platform
 import plistlib
 import subprocess
 
@@ -124,7 +125,11 @@ def main():
         raise RuntimeError(f"Preference verification failed. Backup retained at {backup_dir}.")
 
     subprocess.run(["/usr/bin/killall", "ControlCenter"], check=True)
-    print("Ownership repaired and verified. Control Center is restarting to reload the records.")
+    if int(platform.mac_ver()[0].split(".")[0]) >= 27:
+        # macOS 27 hosts status items here. Its cached catalog can otherwise
+        # write the old ownership back when System Settings opens again.
+        subprocess.run(["/usr/bin/killall", "MenuBarAgent"], check=True)
+    print("Ownership repaired and verified. Menu bar hosts are restarting to reload the records.")
 
 
 if __name__ == "__main__":

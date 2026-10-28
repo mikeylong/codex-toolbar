@@ -81,7 +81,8 @@ With Spark usage enabled:
 
 ```bash
 swift test
-swift run CodexToolbar
+./scripts/build_app.sh
+open dist/CodexToolbar.app
 ./scripts/build_dmg.sh
 ./scripts/generate_screenshots.sh
 ./scripts/smoke_test_install.sh
@@ -126,15 +127,16 @@ If another app's **Allow in the Menu Bar** toggle hides CodexToolbar while Codex
 python3 scripts/repair_menu_bar_ownership.py
 ```
 
-To apply the previewed repair, run `python3 scripts/repair_menu_bar_ownership.py --apply`. This backs up the records under `dist/menu-bar-ownership/`, removes CodexToolbar's bundle reference from other apps' records, and associates it with CodexToolbar's own record. It preserves all visibility choices and unrelated references, then restarts Control Center to reload the records. The preference format is undocumented; the script refuses unfamiliar data. Check both toggles afterward in System Settings → Menu Bar.
+Close System Settings, then apply the previewed repair with `python3 scripts/repair_menu_bar_ownership.py --apply`. This backs up the records under `dist/menu-bar-ownership/`, removes CodexToolbar's bundle reference from other apps' records, and associates it with CodexToolbar's own record. It preserves all visibility choices and unrelated references, then restarts Control Center and, on macOS 27 and later, MenuBarAgent to reload the records. The preference format is undocumented; the script refuses unfamiliar data. Reopen System Settings → Menu Bar and check both toggles afterward.
 
-For manual testing, launch the installed app from Finder. Running its executable directly from an IDE or agent can cause macOS to associate the menu item with that host app again.
+On macOS 26 and later, every UI launch hands off to a fresh LaunchServices instance before SwiftUI or the status item starts. This includes direct launches of the bundled executable from an IDE, agent, or screenshot script. The installer and updater continue to open the app bundle. Maintenance commands run in place without creating UI; screenshot and terminating diagnostic launches preserve their settings and wait for completion. Bare `swift run CodexToolbar` launches are rejected: build and open the app bundle instead. Existing cached ownership mistakes still require the repair above. Older macOS versions keep their existing bundled launch behavior.
 
-If you move or rename the repo and `swift run CodexToolbar` stops compiling with an error like `PCH was compiled with module cache path ...` plus `missing required module 'SwiftShims'`, clear the stale Swift module cache and rerun:
+If you move or rename the repo and building stops with an error like `PCH was compiled with module cache path ...` plus `missing required module 'SwiftShims'`, clear the stale Swift module cache and rebuild:
 
 ```bash
 swift package clean
-swift run CodexToolbar
+./scripts/build_app.sh
+open dist/CodexToolbar.app
 ```
 
 `./scripts/build_app.sh` and `./scripts/install_app.sh` automatically retry once after `swift package clean` when they detect this specific cache-mismatch failure.

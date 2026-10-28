@@ -61,6 +61,35 @@ private enum AppRuntimeError: LocalizedError {
 }
 
 @main
+enum CodexToolbarLauncher {
+    @MainActor
+    static func main() {
+        do {
+            let plan = try AppLaunchBootstrap.plan(
+                bundleURL: Bundle.main.bundleURL,
+                bundleIdentifier: Bundle.main.bundleIdentifier,
+                operatingSystemMajorVersion: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
+                parentProcessID: getppid(),
+                arguments: CommandLine.arguments,
+                environment: ProcessInfo.processInfo.environment
+            )
+            switch plan {
+            case .runApplication:
+                if #available(macOS 15.0, *) {
+                    CodexToolbarMenuBarApp.main()
+                } else {
+                    CodexToolbarApp.main()
+                }
+            case let .openBundle(arguments):
+                try AppLaunchBootstrap.openBundle(arguments: arguments)
+            }
+        } catch {
+            fputs("CodexToolbar launch failed: \(error.localizedDescription)\n", stderr)
+            exit(1)
+        }
+    }
+}
+
 struct CodexToolbarApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
@@ -68,6 +97,18 @@ struct CodexToolbarApp: App {
         Settings {
             EmptyView()
         }
+    }
+}
+
+@available(macOS 15.0, *)
+private struct CodexToolbarMenuBarApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+    var body: some Scene {
+        Settings {
+            EmptyView()
+        }
+        .defaultLaunchBehavior(.suppressed)
     }
 }
 
