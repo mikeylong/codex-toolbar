@@ -311,8 +311,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs,
             showsCredits: provider == .codex && showsCredits,
             showsOpenAIUsage: provider == .codex && showsOpenAIUsage,
-            showsOpenCodexButton: provider == .codex && shouldShowOpenCodexButton,
-            openCodexAction: provider == .codex ? makeOpenCodexAction() : nil,
             claudeUsageStore: provider == .claude ? claudeUsageStore : nil,
             provider: provider
         )
@@ -330,11 +328,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             _ = claudeUsageStore.statusItemPresentation
             _ = claudeUsageStore.statusItemTooltipText
             _ = claudeUsageStore.statusBarAccessibilityText
+            _ = openAIUsageStore.viewData
             _ = loginItemController.isEnabled
             _ = loginItemController.statusMessage
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.updateStatusItem()
+                self?.resizeVisiblePopovers()
                 self?.maybeReportStartupDiagnostics()
                 self?.observeState()
             }
@@ -350,7 +350,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var popoverContentSize: NSSize { popoverContentSize(for: screenshotProvider) }
 
     func popoverContentSize(for provider: UsageProvider) -> NSSize {
-        NSSize(width: 352, height: provider == .claude ? 390 : (showsOpenAIUsage && openAIUsageStore.isEnabled ? 420 : 300))
+        let content = NSHostingView(rootView: makeStatusMenuContentView(provider: provider).naturalContent)
+        return NSSize(width: 352, height: min(ceil(content.fittingSize.height), StatusMenuContentView.maximumPopoverHeight))
+    }
+
+    private func resizeVisiblePopovers() {
+        for (provider, popover) in popovers where popover.isShown {
+            popover.contentSize = popoverContentSize(for: provider)
+        }
     }
 
     func updateStatusItemButton(_ button: NSStatusBarButton, provider: UsageProvider = .codex) {
@@ -504,6 +511,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let providersItem = NSMenuItem(title: "Choose providers…", action: #selector(chooseProviders), keyEquivalent: "")
         providersItem.target = self
         menu.addItem(providersItem)
+
+        if provider == .codex, codexDesktopAppProvider.installedApplicationURL != nil {
+            let openCodexItem = NSMenuItem(title: "Open Codex", action: #selector(openCodexApp), keyEquivalent: "")
+            openCodexItem.target = self
+            menu.addItem(openCodexItem)
+        }
 
         if provider == .codex && openAIUsageStore.isEnabled {
             menu.addItem(.separator())
@@ -683,14 +696,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appRuntime.terminate()
     }
 
-    private var shouldShowOpenCodexButton: Bool {
-        if let showsOpenCodexButton = screenshotConfiguration?.showsOpenCodexButton {
-            return showsOpenCodexButton
-        }
-
-        return codexDesktopAppProvider.installedApplicationURL != nil
-    }
-
     private var visibleSupplementalFamilyIDs: Set<String> {
         if let visibleSupplementalFamilyIDs = screenshotConfiguration?.visibleSupplementalFamilyIDs {
             return visibleSupplementalFamilyIDs
@@ -707,21 +712,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         preferences.isOpenAIUsageVisible
     }
 
-    private func makeOpenCodexAction() -> (() -> Void)? {
-        guard shouldShowOpenCodexButton else {
-            return nil
-        }
-
-        return { [weak self] in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-
-                do {
-                    try await self.codexDesktopAppProvider.openCodex()
-                    self.closePopover()
-                } catch {
-                    fputs("Open Codex failed: \(error.localizedDescription)\n", stderr)
-                }
+    @objc private func openCodexApp() {
+        guard codexDesktopAppProvider.installedApplicationURL != nil else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try await self.codexDesktopAppProvider.openCodex()
+                self.closePopover()
+            } catch {
+                fputs("Open Codex failed: \(error.localizedDescription)\n", stderr)
             }
         }
     }
