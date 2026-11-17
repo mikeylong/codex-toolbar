@@ -20,11 +20,40 @@ struct ProviderChooserCapture {
         app.finishLaunching()
         let chooser = UsageProviderChooser(current: .both)
         var succeeded = false
-        let timer = Timer(timeInterval: 1, repeats: false) { _ in
+        var activeSince: Date?
+        let deadline = Date().addingTimeInterval(5)
+        let timer = Timer(timeInterval: 0.1, repeats: true) { timer in
             MainActor.assumeIsolated {
+                let window = chooser.alert.window
+                let button = chooser.alert.buttons[0]
+                guard app.isActive, window.isKeyWindow else {
+                    activeSince = nil
+                    guard Date() < deadline else {
+                        fputs("Chooser capture failed: window did not become active (appActive=\(app.isActive), windowKey=\(window.isKeyWindow)).\n", stderr)
+                        timer.invalidate()
+                        app.abortModal()
+                        return
+                    }
+                    app.activate(ignoringOtherApps: true)
+                    window.makeKeyAndOrderFront(nil)
+                    return
+                }
+                // AppKit activation is asynchronous. Allow an active display
+                // cycle before snapshotting the accent-colored native controls.
+                guard let activeSince else {
+                    activeSince = Date()
+                    return
+                }
+                guard Date().timeIntervalSince(activeSince) >= 0.2 else { return }
+                timer.invalidate()
                 defer { app.abortModal() }
-                guard let view = chooser.alert.window.contentView else { return }
+                guard button.isEnabled, window.defaultButtonCell === button.cell else {
+                    fputs("Chooser capture failed: Show usage is not the enabled default button.\n", stderr)
+                    return
+                }
+                guard let view = window.contentView else { return }
                 view.layoutSubtreeIfNeeded()
+                view.displayIfNeeded()
                 let bounds = view.bounds.integral
                 guard let bitmap = view.bitmapImageRepForCachingDisplay(in: bounds) else { return }
                 view.cacheDisplay(in: bounds, to: bitmap)
@@ -43,6 +72,7 @@ struct ProviderChooserCapture {
                       let png = rendered.representation(using: .png, properties: [:]) else { return }
                 do {
                     try png.write(to: output)
+                    print("Captured \(appearance) chooser with active key window and enabled default button.")
                     succeeded = true
                 } catch {
                     fputs("Chooser capture failed: \(error)\n", stderr)
