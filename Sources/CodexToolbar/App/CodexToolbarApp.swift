@@ -933,22 +933,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Preserve the actual native item positions so a paired capture can
         // expose missing inter-item spacing instead of hiding it in a crop.
         let captureBounds = captures.dropFirst().reduce(first.frame) { $0.union($1.frame) }
-        let horizontalPadding: CGFloat = 8
-        let verticalPadding: CGFloat = 6
-        let canvasSize = NSSize(
-            width: captureBounds.width + (horizontalPadding * 2),
-            height: captureBounds.height + (verticalPadding * 2)
-        )
-
-        let image = NSImage(size: canvasSize)
+        // Keep the native items on a transparent canvas without adding a
+        // screenshot-only frame that contrasts with the surrounding page.
+        let image = NSImage(size: captureBounds.size)
         image.lockFocus()
-        backgroundColor(for: configuration.appearance).setFill()
-        NSBezierPath(rect: NSRect(origin: .zero, size: canvasSize)).fill()
         for capture in captures {
             capture.representation.draw(
                 in: capture.frame.offsetBy(
-                    dx: horizontalPadding - captureBounds.minX,
-                    dy: verticalPadding - captureBounds.minY
+                    dx: -captureBounds.minX,
+                    dy: -captureBounds.minY
                 )
             )
         }
@@ -985,15 +978,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let fileURL = directoryURL.appendingPathComponent("\(configuration.scenario.name)-\(configuration.appearance.rawValue)-popover.png")
         try Self.writePNG(image, to: fileURL)
-    }
-
-    private func backgroundColor(for appearance: ScreenshotAppearance) -> NSColor {
-        switch appearance {
-        case .light:
-            return NSColor(calibratedWhite: 0.93, alpha: 1.0)
-        case .dark:
-            return NSColor(calibratedWhite: 0.24, alpha: 1.0)
-        }
     }
 
     private static func writePNG(_ image: NSImage, to fileURL: URL) throws {
