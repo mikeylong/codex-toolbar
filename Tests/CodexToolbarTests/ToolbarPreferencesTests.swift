@@ -3,6 +3,33 @@ import XCTest
 
 @MainActor
 final class ToolbarPreferencesTests: XCTestCase {
+    func testProviderSelectionRequiresExplicitFirstRunChoice() {
+        let defaults = Self.makeDefaults()
+        let preferences = ToolbarPreferences(defaults: defaults)
+
+        XCTAssertNil(preferences.usageProviderSelection)
+        defaults.set(true, forKey: "showClaudeUsage")
+        XCTAssertNil(preferences.usageProviderSelection)
+    }
+
+    func testProviderSelectionPersistsAcrossPreferenceInstances() {
+        let defaults = Self.makeDefaults()
+        let preferences = ToolbarPreferences(defaults: defaults)
+
+        for selection in UsageProviderSelection.allCases {
+            preferences.setUsageProviderSelection(selection)
+
+            XCTAssertEqual(ToolbarPreferences(defaults: defaults).usageProviderSelection, selection)
+        }
+    }
+
+    func testUnrecognizedProviderSelectionReturnsToChooser() {
+        let defaults = Self.makeDefaults()
+        defaults.set("unsupported-provider", forKey: "usageProviderSelection")
+
+        XCTAssertNil(ToolbarPreferences(defaults: defaults).usageProviderSelection)
+    }
+
     func testCreditsVisibilityDefaultsToHidden() {
         let defaults = Self.makeDefaults()
         let preferences = ToolbarPreferences(defaults: defaults)

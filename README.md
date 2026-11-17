@@ -1,6 +1,6 @@
 # CodexToolbar
 
-A small macOS menu bar app that shows your Codex rate-limit remaining values.
+A small macOS menu bar app that shows remaining Codex and Claude usage.
 
 ## What It Does
 
@@ -8,16 +8,18 @@ A small macOS menu bar app that shows your Codex rate-limit remaining values.
 - Shows a popover with used/remaining percentages, progress bars, and reset timing.
 - Projects from the current 5h and Weekly pace whether tokens will run out before reset.
 - Optionally shows organization-level OpenAI API usage in the popover when you enable the view and configure an `OPENAI_ADMIN_KEY`.
+- Asks which providers to show: Codex, Claude, or both. Each provider gets its own menu bar item and focused usage panel.
+- Shows Claude subscription usage (session, weekly, and model-specific weekly limits) using your signed-in Claude Code CLI.
 - Adds an `Open Codex` button in the popover when the Codex desktop app is installed.
-- Refreshes automatically on system clock minute boundaries.
+- Refreshes Codex automatically on system clock minute boundaries and Claude every five minutes.
 - Supports manual refresh from the menu bar item's right-click menu.
 - Can be installed as a real `.app` and configured to launch at login.
 
 ## Requirements
 
 - macOS 14+
-- Codex CLI installed locally
-- Codex installed and signed in on the same Mac
+- For Codex usage: Codex CLI installed locally and signed in on the same Mac
+- For Claude usage: a current Claude Code CLI, signed in with a Claude subscription
 
 ## Install
 
@@ -49,10 +51,12 @@ That quits `CodexToolbar` if it is running, removes its launch-at-login registra
 
 ## Use
 
-- Left-click the menu bar item to see the current rate-limit status panel.
+- On first launch, select Codex, Claude, or both using the visible provider checkboxes. Your choice is remembered. Right-click either item and select `Choose providers…` to change it.
+- Left-click a provider's menu bar item to see that provider's usage panel. With both enabled, the Codex mark and Claude asterisk identify the two items.
 - Enable `Show API usage` from the right-click menu, then use the OpenAI API usage section in the popover after configuring an `OPENAI_ADMIN_KEY`.
 - Use the popover's `Open Codex` button to jump into the Codex desktop app when it is installed locally.
-- Right-click the menu bar item for `Refresh now`, `Launch at login`, `Show API usage`, `Configure OpenAI admin key…`, and `Quit`.
+- Install a current Claude Code CLI and sign in with `claude auth login` first. The integration was verified with Claude Code 2.1.326; older versions may return only session cost and will show limits as unavailable.
+- Each item's `Refresh now` refreshes its own provider. Codex-specific API, credit, and Spark options appear only in the Codex menu. Launch at login, provider selection, and Quit apply to the app.
 - Use `Launch at login` after running the installed app from `~/Applications`.
 
 ## Screenshots
@@ -70,12 +74,20 @@ With Spark usage enabled:
 | --- | --- |
 | ![Weekly Codex usage with separate Spark 5h and Weekly limits in light mode](screenshots/readme-spark-light-popover.png) | ![Weekly Codex usage with separate Spark 5h and Weekly limits in dark mode](screenshots/readme-spark-dark-popover.png) |
 
+Claude's separate panel in v0.1.20, with fixed sample values:
+
+| Light | Dark |
+| --- | --- |
+| ![Claude usage with session, weekly, and model-specific limits in light mode](screenshots/readme-claude-light-popover.png) | ![Claude usage with session, weekly, and model-specific limits in dark mode](screenshots/readme-claude-dark-popover.png) |
+
 ## Notes
 
 - The app launches its own `codex app-server` subprocess. You do not need to keep an interactive Codex CLI session open.
 - The displayed percentages in the popover are remaining percentages, matching the Codex UI.
 - Window labels in the popover follow Codex UI display conventions first, with near-whole hour/day/week payload values normalized as a fallback.
-- Auto-refresh syncs to system clock minute boundaries, so the numbers update at the start of each minute unless you refresh manually from the right-click menu.
+- Codex auto-refresh syncs to system clock minute boundaries, so its numbers update at the start of each minute unless you refresh manually from the right-click menu.
+- Claude usage refreshes independently every five minutes while enabled, on manual refresh, and when opening its stale popover. Its panel shows remaining percentages, Claude's reset descriptions, and its own update time. Its menu bar indicator reflects the most constrained session/all-model weekly limit; model-specific limits such as Fable remain separately labeled in the panel. Unavailable or stale Claude data is marked instead of displaying an old bar as current.
+- Claude runs the built-in `/usage` command in noninteractive JSON mode with tools, hooks, MCP servers, session persistence, and auto-updates disabled for the probe. The app uses Claude's existing sign-in; it does not read or store Claude tokens. Only quota rows are displayed; local usage insights are neither displayed nor saved. No model prompt is sent.
 
 ## Development
 

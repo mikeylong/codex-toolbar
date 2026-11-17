@@ -42,32 +42,107 @@ enum CodexLoginStatus: Equatable, Sendable {
     case indeterminate(String?)
 }
 
+// A cancelled AsyncStream cannot be consumed again. Provider changes reuse the
+// client, so each store start needs a new subscription to the same event source.
+final class CodexAppServerEventChannel: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: AsyncStream<CodexAppServerEvent>.Continuation?
+
+    func subscribe() -> AsyncStream<CodexAppServerEvent> {
+        let (stream, nextContinuation) = AsyncStream<CodexAppServerEvent>.makeStream()
+        let previous = lock.withLock {
+            let previous = continuation
+            continuation = nextContinuation
+            return previous
+        }
+        previous?.finish()
+        return stream
+    }
+
+    func yield(_ event: CodexAppServerEvent) {
+        let continuation = lock.withLock { self.continuation }
+        continuation?.yield(event)
+    }
+}
+
+// FileHandle.AsyncBytes can leave an idle pipe read occupying its shared read
+// executor after task cancellation. Readiness callbacks avoid blocking another
+// pipe or a replacement connection; this stream only carries complete lines.
+private final class CodexAppServerLineReader: @unchecked Sendable {
+    let lines: AsyncStream<String>
+    private let continuation: AsyncStream<String>.Continuation
+    private let handle: FileHandle
+    private let lock = NSLock()
+    private var buffer = Data()
+    private var stopped = false
+
+    init(handle: FileHandle) {
+        self.handle = handle
+        let (lines, continuation) = AsyncStream<String>.makeStream()
+        self.lines = lines
+        self.continuation = continuation
+        handle.readabilityHandler = { [weak self] handle in
+            self?.consume(handle.availableData)
+        }
+    }
+
+    deinit { stop() }
+
+    func stop() {
+        lock.withLock {
+            stopped = true
+            buffer.removeAll()
+        }
+        handle.readabilityHandler = nil
+        continuation.finish()
+    }
+
+    private func consume(_ data: Data) {
+        let ended = lock.withLock {
+            guard !stopped else { return false }
+            if data.isEmpty {
+                if !buffer.isEmpty { continuation.yield(String(decoding: buffer, as: UTF8.self)) }
+                buffer.removeAll()
+                stopped = true
+                continuation.finish()
+                return true
+            }
+            buffer.append(data)
+            while let newline = buffer.firstIndex(of: 0x0A) {
+                continuation.yield(String(decoding: buffer[..<newline], as: UTF8.self))
+                buffer.removeSubrange(...newline)
+            }
+            return false
+        }
+        if ended { handle.readabilityHandler = nil }
+    }
+}
+
 actor CodexAppServerClient: CodexRateLimitClient {
     nonisolated static let snapshotLoadTimeoutSeconds: TimeInterval = 20
 
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
-    private let eventStream: AsyncStream<CodexAppServerEvent>
-    private let eventContinuation: AsyncStream<CodexAppServerEvent>.Continuation
+    private let eventChannel = CodexAppServerEventChannel()
+    private let executablePathOverride: String?
 
     private var process: Process?
     private var stdinHandle: FileHandle?
     private var pendingResponses: [String: CheckedContinuation<Data, Error>] = [:]
     private var stdoutTask: Task<Void, Never>?
     private var stderrTask: Task<Void, Never>?
+    private var stdoutReader: CodexAppServerLineReader?
+    private var stderrReader: CodexAppServerLineReader?
     private var idCounter = 0
     private var isConnected = false
+    private var connectionID: UUID?
 
-    init() {
-        var continuation: AsyncStream<CodexAppServerEvent>.Continuation!
-        eventStream = AsyncStream { streamContinuation in
-            continuation = streamContinuation
-        }
-        eventContinuation = continuation
+    init(executablePath: String? = nil) {
+        executablePathOverride = executablePath
     }
 
     nonisolated func events() -> AsyncStream<CodexAppServerEvent> {
-        eventStream
+        eventChannel.subscribe()
     }
 
     func connect() async throws {
@@ -75,7 +150,8 @@ actor CodexAppServerClient: CodexRateLimitClient {
             return
         }
 
-        let codexPath = try Self.locateCodexCLI()
+        let codexPath = try executablePathOverride ?? Self.locateCodexCLI()
+        let connectionID = UUID()
         let process = Process()
         process.executableURL = URL(fileURLWithPath: codexPath)
         process.arguments = ["app-server", "--listen", "stdio://"]
@@ -90,42 +166,46 @@ actor CodexAppServerClient: CodexRateLimitClient {
         process.standardError = stderrPipe
         process.terminationHandler = { [weak self] terminatedProcess in
             Task {
-                await self?.handleTermination(status: terminatedProcess.terminationStatus)
+                await self?.handleTermination(status: terminatedProcess.terminationStatus, connectionID: connectionID)
             }
         }
 
         try process.run()
 
         self.process = process
+        self.connectionID = connectionID
         stdinHandle = stdinPipe.fileHandleForWriting
         isConnected = true
 
+        let stdoutReader = CodexAppServerLineReader(handle: stdoutPipe.fileHandleForReading)
+        let stderrReader = CodexAppServerLineReader(handle: stderrPipe.fileHandleForReading)
+        self.stdoutReader = stdoutReader
+        self.stderrReader = stderrReader
         stdoutTask = Task { [weak self] in
             guard let self else { return }
-            do {
-                for try await line in stdoutPipe.fileHandleForReading.bytes.lines {
-                    await self.handleStdoutLine(String(line))
-                }
-            } catch {
-                await self.finishPendingResponses(with: CodexAppServerError.transportClosed)
+            for await line in stdoutReader.lines {
+                guard !Task.isCancelled else { return }
+                await self.handleStdoutLine(line, connectionID: connectionID)
             }
         }
 
         stderrTask = Task { [weak self] in
             guard let self else { return }
-            do {
-                for try await line in stderrPipe.fileHandleForReading.bytes.lines {
-                    self.eventContinuation.yield(.stderr(String(line)))
-                }
-            } catch {
-                self.eventContinuation.yield(.stderr("Failed to read Codex app-server stderr."))
+            for await line in stderrReader.lines {
+                guard !Task.isCancelled else { return }
+                await self.emit(.stderr(line), connectionID: connectionID)
             }
         }
 
-        try await sendInitializeHandshake()
+        try await sendInitializeHandshake(connectionID: connectionID)
     }
 
     func disconnect() async {
+        connectionID = nil
+        stdoutReader?.stop()
+        stderrReader?.stop()
+        stdoutReader = nil
+        stderrReader = nil
         stdoutTask?.cancel()
         stderrTask?.cancel()
         stdoutTask = nil
@@ -158,7 +238,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
     }
 
     func readLoginStatus() async throws -> CodexLoginStatus {
-        let codexPath = try Self.locateCodexCLI()
+        let codexPath = try executablePathOverride ?? Self.locateCodexCLI()
         let result = try await Self.runCodexCommand(
             executablePath: codexPath,
             arguments: ["login", "status"]
@@ -173,7 +253,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
     }
 
     func loadSnapshot(refreshToken: Bool) async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
-        let codexPath = try Self.locateCodexCLI()
+        let codexPath = try executablePathOverride ?? Self.locateCodexCLI()
         let process = Process()
         process.executableURL = URL(fileURLWithPath: codexPath)
         process.arguments = ["app-server", "--listen", "stdio://"]
@@ -241,14 +321,15 @@ actor CodexAppServerClient: CodexRateLimitClient {
         }
     }
 
-    private func sendInitializeHandshake() async throws {
+    private func sendInitializeHandshake(connectionID: UUID) async throws {
         let params = InitializeParams(
             clientInfo: ClientInfo(name: "CodexToolbar", version: AppVersion.current),
             capabilities: InitializeCapabilities(experimentalApi: true, optOutNotificationMethods: nil)
         )
 
         _ = try await request(method: "initialize", params: params, responseType: InitializeResponse.self)
-        try await sendNotification(method: "initialized", params: nil as JSONNull?)
+        guard self.connectionID == connectionID else { throw CodexAppServerError.transportClosed }
+        try sendNotification(method: "initialized", params: nil as JSONNull?)
     }
 
     private func request<Params: Encodable, Response: Decodable>(
@@ -277,7 +358,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
         }
     }
 
-    private func sendNotification<Params: Encodable>(method: String, params: Params?) async throws {
+    private func sendNotification<Params: Encodable>(method: String, params: Params?) throws {
         let notification = JSONRPCNotification(method: method, params: params)
         let payload = try encoder.encode(notification)
         try write(payload)
@@ -293,7 +374,8 @@ actor CodexAppServerClient: CodexRateLimitClient {
         try stdinHandle.write(contentsOf: linePayload)
     }
 
-    private func handleStdoutLine(_ line: String) {
+    private func handleStdoutLine(_ line: String, connectionID: UUID) {
+        guard self.connectionID == connectionID else { return }
         guard let data = line.data(using: .utf8) else { return }
         guard
             let jsonObject = try? JSONSerialization.jsonObject(with: data),
@@ -334,18 +416,28 @@ actor CodexAppServerClient: CodexRateLimitClient {
             do {
                 let paramsData = try JSONSerialization.data(withJSONObject: params)
                 let update = try decoder.decode(AccountRateLimitsUpdatedNotification.self, from: paramsData)
-                eventContinuation.yield(.rateLimitsUpdated(GetAccountRateLimitsResponse(rateLimits: update.rateLimits, rateLimitsByLimitId: nil)))
+                eventChannel.yield(.rateLimitsUpdated(GetAccountRateLimitsResponse(rateLimits: update.rateLimits, rateLimitsByLimitId: nil)))
             } catch {
-                eventContinuation.yield(.stderr("Failed to decode rate-limit update."))
+                eventChannel.yield(.stderr("Failed to decode rate-limit update."))
             }
         }
     }
 
-    private func handleTermination(status: Int32) {
-        guard isConnected else { return }
+    private func emit(_ event: CodexAppServerEvent, connectionID: UUID) {
+        guard self.connectionID == connectionID else { return }
+        eventChannel.yield(event)
+    }
+
+    private func handleTermination(status: Int32, connectionID: UUID) {
+        guard isConnected, self.connectionID == connectionID else { return }
+        self.connectionID = nil
         isConnected = false
         process = nil
         stdinHandle = nil
+        stdoutReader?.stop()
+        stderrReader?.stop()
+        stdoutReader = nil
+        stderrReader = nil
         stdoutTask?.cancel()
         stderrTask?.cancel()
         stdoutTask = nil
@@ -353,7 +445,7 @@ actor CodexAppServerClient: CodexRateLimitClient {
         finishPendingResponses(with: CodexAppServerError.transportClosed)
 
         let reason = status == 0 ? nil : "Codex app-server exited with status \(status)."
-        eventContinuation.yield(.disconnected(reason))
+        eventChannel.yield(.disconnected(reason))
     }
 
     private func finishPendingResponses(with error: Error) {

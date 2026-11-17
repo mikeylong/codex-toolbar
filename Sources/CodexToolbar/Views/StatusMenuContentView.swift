@@ -3,6 +3,7 @@ import SwiftUI
 
 struct StatusMenuContentView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openURL) private var openURL
 
     let store: RateLimitStore
     let openAIUsageStore: OpenAIUsageStore
@@ -12,18 +13,85 @@ struct StatusMenuContentView: View {
     let showsOpenAIUsage: Bool
     let showsOpenCodexButton: Bool
     let openCodexAction: (() -> Void)?
+    var claudeUsageStore: ClaudeUsageStore? = nil
+    var provider: UsageProvider = .codex
+
+    var panelTitle: String {
+        provider == .codex ? "Codex rate limit status" : "Claude usage"
+    }
+
+    var displaysCodexContent: Bool { provider == .codex }
+    var displaysClaudeContent: Bool { provider == .claude }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text(panelTitle)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(palette.primaryText)
+                Spacer(minLength: 0)
+                if provider == .claude, claudeUsageStore?.isLoading == true {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+
+            ViewThatFits(in: .vertical) {
+                providerDetails.fixedSize(horizontal: false, vertical: true)
+                ScrollView {
+                    providerDetails
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
+            Divider()
+                .overlay(palette.divider)
+            providerFooter
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(width: 352, alignment: .leading)
+        .frame(maxHeight: Self.maximumPopoverHeight)
+        .background {
+            if let surface = palette.surface {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(surface)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(palette.border, lineWidth: 1)
+                    }
+            }
+        }
+    }
+
+    static var maximumPopoverHeight: CGFloat {
+        min(500, max(280, (NSScreen.main?.visibleFrame.height ?? 800) - 100))
+    }
+
+    @ViewBuilder
+    private var providerDetails: some View {
+        switch provider {
+        case .codex:
+            codexDetails
+        case .claude:
+            if let claudeUsageStore {
+                ClaudeUsageDetailsView(store: claudeUsageStore, palette: palette)
+            } else {
+                Text("Claude usage is unavailable.")
+                    .font(.body)
+                    .foregroundStyle(palette.secondaryText)
+            }
+        }
+    }
+
+    private var codexDetails: some View {
         let visibleCards = store.visibleCards(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs)
         let cardSections = store.visibleCardSections(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs)
         let credit = showsCredits ? store.visibleCreditViewData(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs) : nil
         let openAIUsageViewData = showsOpenAIUsage ? openAIUsageStore.viewData : nil
 
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Codex rate limit status")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(palette.primaryText)
-
+        return VStack(alignment: .leading, spacing: 14) {
             if let staleMessage = store.staleMessage, !visibleCards.isEmpty {
                 Label(staleMessage, systemImage: "exclamationmark.triangle.fill")
                     .font(.body.weight(.semibold))
@@ -51,7 +119,6 @@ struct StatusMenuContentView: View {
                     .overlay(palette.divider)
                     .padding(.top, 14)
                     .padding(.bottom, 12)
-
                 CreditSummaryView(credit: credit, palette: palette)
             }
 
@@ -60,50 +127,146 @@ struct StatusMenuContentView: View {
                     .overlay(palette.divider)
                     .padding(.top, 14)
                     .padding(.bottom, 12)
-
                 OpenAIUsageSummaryView(viewData: openAIUsageViewData, palette: palette)
             }
+        }
+    }
 
-            Divider()
-                .overlay(palette.divider)
+    @ViewBuilder
+    private var providerFooter: some View {
+        switch provider {
+        case .codex:
             HStack(spacing: 8) {
                 if showsOpenCodexButton {
                     FooterActionButton(title: "Open Codex", palette: palette) {
                         openCodexAction?()
                     }
                 }
-
                 Spacer(minLength: 0)
-
-                if let lastUpdated = store.lastUpdated, !visibleCards.isEmpty {
+                if let lastUpdated = store.lastUpdated,
+                   !store.visibleCards(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs).isEmpty {
                     if store.state == .connecting {
                         ProgressView()
                             .controlSize(.small)
                             .scaleEffect(0.75)
                     }
-
                     Text(RateLimitFormatter.updatedFooterText(for: lastUpdated))
                         .font(.body)
                         .foregroundStyle(palette.primaryText)
                 }
             }
-        }
-        .padding(16)
-        .frame(width: 352, alignment: .leading)
-        .background {
-            if let surface = palette.surface {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(surface)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(palette.border, lineWidth: 1)
-                    }
+        case .claude:
+            HStack(spacing: 8) {
+                FooterActionButton(title: "View Claude usage", palette: palette) {
+                    openURL(URL(string: "https://claude.ai/settings/usage")!)
+                }
+                Spacer(minLength: 0)
+                if let lastUpdated = claudeUsageStore?.lastUpdated {
+                    Text(RateLimitFormatter.updatedFooterText(for: lastUpdated))
+                        .font(.caption)
+                        .foregroundStyle(palette.secondaryText)
+                        .help("Last successful Claude usage read")
+                }
             }
         }
     }
 
     private var palette: StatusMenuPalette {
         StatusMenuPalette.forAppearance(screenshotAppearance, colorScheme: colorScheme)
+    }
+}
+
+struct ClaudeUsagePanelPresentation {
+    let coreWindows: [ClaudeUsageWindowViewData]
+    let modelWindows: [ClaudeUsageWindowViewData]
+
+    init(windows: [ClaudeUsageWindowViewData]) {
+        coreWindows = windows.filter(\.isCoreWindow)
+        modelWindows = windows.filter { !$0.isCoreWindow }
+    }
+
+    static func compactResetDescription(_ description: String?, localTimeZoneIdentifier: String = TimeZone.current.identifier) -> String? {
+        guard let description else { return nil }
+        // Only remove a redundant, exact local-zone suffix. Never infer a date,
+        // translate unknown reset prose, or hide a different time zone.
+        let localSuffix = " (\(localTimeZoneIdentifier))"
+        guard description.hasSuffix(localSuffix) else { return description }
+        return String(description.dropLast(localSuffix.count))
+    }
+}
+
+private struct ClaudeUsageDetailsView: View {
+    let store: ClaudeUsageStore
+    let palette: StatusMenuPalette
+
+    private var presentation: ClaudeUsagePanelPresentation {
+        ClaudeUsagePanelPresentation(windows: store.windowViewData)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            if let statusMessage = store.statusMessage {
+                if store.isStale {
+                    Label("Showing last known usage. \(statusMessage)", systemImage: "exclamationmark.triangle.fill")
+                        .font(.body)
+                        .foregroundStyle(palette.primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(statusMessage)
+                        .font(.body)
+                        .foregroundStyle(palette.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            ForEach(presentation.coreWindows) { window in
+                ClaudeUsageWindowRow(window: window, palette: palette)
+            }
+
+            if !presentation.modelWindows.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    if !presentation.coreWindows.isEmpty {
+                        Divider().overlay(palette.divider)
+                    }
+                    Text("Model limits")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(palette.secondaryText)
+                    ForEach(presentation.modelWindows) { window in
+                        ClaudeUsageWindowRow(window: window, palette: palette)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct ClaudeUsageWindowRow: View {
+    let window: ClaudeUsageWindowViewData
+    let palette: StatusMenuPalette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(window.title)
+                    .font(.body.weight(.semibold))
+                Spacer(minLength: 8)
+                Text("\(window.remainingPercent)% remaining")
+                    .font(.body.weight(.semibold))
+                    .monospacedDigit()
+            }
+            RemainingUsageProgressBar(remainingPercent: window.remainingPercent, palette: palette)
+            if let reset = ClaudeUsagePanelPresentation.compactResetDescription(window.resetDescription) {
+                Text(reset)
+                    .font(.body)
+                    .foregroundStyle(palette.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .help(window.resetDescription ?? reset)
+            }
+        }
+        .foregroundStyle(palette.primaryText)
+        .help(window.usageText)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(window.accessibilityLabel)
     }
 }
 
@@ -596,8 +759,17 @@ private struct RateLimitProgressBar: View {
     let palette: StatusMenuPalette
 
     var body: some View {
+        RemainingUsageProgressBar(remainingPercent: card.remainingPercent, palette: palette)
+    }
+}
+
+private struct RemainingUsageProgressBar: View {
+    let remainingPercent: Int
+    let palette: StatusMenuPalette
+
+    var body: some View {
         GeometryReader { geometry in
-            let width = max(geometry.size.width * CGFloat(card.remainingPercent) / 100, card.remainingPercent > 0 ? 8 : 0)
+            let width = max(geometry.size.width * CGFloat(remainingPercent) / 100, remainingPercent > 0 ? 8 : 0)
 
             ZStack(alignment: .leading) {
                 Capsule(style: .continuous)
@@ -613,7 +785,7 @@ private struct RateLimitProgressBar: View {
     }
 
     private var fillColor: Color {
-        Color(nsColor: palette.fillColor(for: card.progressState))
+        Color(nsColor: palette.fillColor(for: RateLimitProgressState(remainingPercent: remainingPercent)))
     }
 }
 
