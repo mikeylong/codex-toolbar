@@ -11,32 +11,18 @@ struct StatusMenuContentView: View {
     let visibleSupplementalFamilyIDs: Set<String>
     let showsCredits: Bool
     let showsOpenAIUsage: Bool
-    let showsOpenCodexButton: Bool
-    let openCodexAction: (() -> Void)?
     var claudeUsageStore: ClaudeUsageStore? = nil
     var provider: UsageProvider = .codex
 
     var panelTitle: String {
-        provider == .codex ? "Codex rate limit status" : "Claude usage"
+        provider == .codex ? "Codex usage" : "Claude usage"
     }
 
     var displaysCodexContent: Bool { provider == .codex }
     var displaysClaudeContent: Bool { provider == .claude }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text(panelTitle)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(palette.primaryText)
-                Spacer(minLength: 0)
-                if provider == .claude, claudeUsageStore?.isLoading == true {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-            }
-            .fixedSize(horizontal: false, vertical: true)
-
+        panel {
             ViewThatFits(in: .vertical) {
                 providerDetails.fixedSize(horizontal: false, vertical: true)
                 ScrollView {
@@ -44,6 +30,35 @@ struct StatusMenuContentView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+        }
+        .frame(maxHeight: Self.maximumPopoverHeight, alignment: .top)
+    }
+
+    // Measure the same content without the scroll fallback, then let AppKit
+    // constrain the actual popover. Provider-specific guessed heights leave
+    // short panels padded and make longer ones scroll before they need to.
+    var naturalContent: some View {
+        panel {
+            providerDetails.fixedSize(horizontal: false, vertical: true)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func panel<Details: View>(@ViewBuilder details: () -> Details) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text(panelTitle)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(palette.primaryText)
+                Spacer(minLength: 0)
+                if isRefreshing, footerLastUpdated == nil {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+
+            details()
 
             Divider()
                 .overlay(palette.divider)
@@ -52,7 +67,6 @@ struct StatusMenuContentView: View {
         }
         .padding(16)
         .frame(width: 352, alignment: .leading)
-        .frame(maxHeight: Self.maximumPopoverHeight)
         .background {
             if let surface = palette.surface {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -132,43 +146,40 @@ struct StatusMenuContentView: View {
         }
     }
 
-    @ViewBuilder
     private var providerFooter: some View {
-        switch provider {
-        case .codex:
-            HStack(spacing: 8) {
-                if showsOpenCodexButton {
-                    FooterActionButton(title: "Open Codex", palette: palette) {
-                        openCodexAction?()
-                    }
-                }
-                Spacer(minLength: 0)
-                if let lastUpdated = store.lastUpdated,
-                   !store.visibleCards(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs).isEmpty {
-                    if store.state == .connecting {
-                        ProgressView()
-                            .controlSize(.small)
-                            .scaleEffect(0.75)
-                    }
-                    Text(RateLimitFormatter.updatedFooterText(for: lastUpdated))
-                        .font(.body)
-                        .foregroundStyle(palette.primaryText)
-                }
+        HStack(spacing: 8) {
+            FooterActionButton(title: "View usage", palette: palette) {
+                openURL(provider.usageURL)
             }
-        case .claude:
-            HStack(spacing: 8) {
-                FooterActionButton(title: "View Claude usage", palette: palette) {
-                    openURL(URL(string: "https://claude.ai/settings/usage")!)
+            .help("View \(provider.title) usage in your browser")
+            .accessibilityLabel("View \(provider.title) usage")
+            Spacer(minLength: 0)
+            if let lastUpdated = footerLastUpdated {
+                if isRefreshing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .scaleEffect(0.75)
                 }
-                Spacer(minLength: 0)
-                if let lastUpdated = claudeUsageStore?.lastUpdated {
-                    Text(RateLimitFormatter.updatedFooterText(for: lastUpdated))
-                        .font(.caption)
-                        .foregroundStyle(palette.secondaryText)
-                        .help("Last successful Claude usage read")
-                }
+                Text(RateLimitFormatter.updatedFooterText(for: lastUpdated))
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(palette.secondaryText)
+                    .help("Last successful \(provider == .codex ? "Codex" : "Claude") usage read")
             }
         }
+    }
+
+    private var footerLastUpdated: Date? {
+        switch provider {
+        case .codex:
+            store.visibleCards(visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs).isEmpty ? nil : store.lastUpdated
+        case .claude:
+            claudeUsageStore?.lastUpdated
+        }
+    }
+
+    private var isRefreshing: Bool {
+        provider == .codex ? store.state == .connecting : claudeUsageStore?.isLoading == true
     }
 
     private var palette: StatusMenuPalette {
@@ -204,11 +215,11 @@ private struct ClaudeUsageDetailsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             if let statusMessage = store.statusMessage {
                 if store.isStale {
                     Label("Showing last known usage. \(statusMessage)", systemImage: "exclamationmark.triangle.fill")
-                        .font(.body)
+                        .font(.body.weight(.semibold))
                         .foregroundStyle(palette.primaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
@@ -219,22 +230,25 @@ private struct ClaudeUsageDetailsView: View {
                 }
             }
 
-            ForEach(presentation.coreWindows) { window in
-                ClaudeUsageWindowRow(window: window, palette: palette)
-            }
+            VStack(alignment: .leading, spacing: 0) {
+                windowRows(presentation.coreWindows)
 
-            if !presentation.modelWindows.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
+                if !presentation.modelWindows.isEmpty {
                     if !presentation.coreWindows.isEmpty {
-                        Divider().overlay(palette.divider)
+                        UsageSectionDivider(palette: palette)
                     }
-                    Text("Model limits")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(palette.secondaryText)
-                    ForEach(presentation.modelWindows) { window in
-                        ClaudeUsageWindowRow(window: window, palette: palette)
-                    }
+                    UsageSectionHeading(title: "Model limits", palette: palette)
+                    windowRows(presentation.modelWindows)
                 }
+            }
+        }
+    }
+
+    private func windowRows(_ windows: [ClaudeUsageWindowViewData]) -> some View {
+        ForEach(Array(windows.enumerated()), id: \.element.id) { index, window in
+            ClaudeUsageWindowRow(window: window, palette: palette)
+            if index < windows.count - 1 {
+                UsageSectionDivider(palette: palette)
             }
         }
     }
@@ -245,28 +259,73 @@ private struct ClaudeUsageWindowRow: View {
     let palette: StatusMenuPalette
 
     var body: some View {
+        UsageWindowView(
+            title: window.title,
+            remainingPercent: window.remainingPercent,
+            usageText: window.usageText,
+            resetText: ClaudeUsagePanelPresentation.compactResetDescription(window.resetDescription),
+            resetHelp: window.resetDescription,
+            palette: palette
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(window.accessibilityLabel)
+    }
+}
+
+private struct UsageWindowView: View {
+    let title: String
+    let remainingPercent: Int
+    let usageText: String
+    let resetText: String?
+    var resetHelp: String? = nil
+    let palette: StatusMenuPalette
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(window.title)
-                    .font(.body.weight(.semibold))
-                Spacer(minLength: 8)
-                Text("\(window.remainingPercent)% remaining")
-                    .font(.body.weight(.semibold))
-                    .monospacedDigit()
-            }
-            RemainingUsageProgressBar(remainingPercent: window.remainingPercent, palette: palette)
-            if let reset = ClaudeUsagePanelPresentation.compactResetDescription(window.resetDescription) {
-                Text(reset)
+            Text(title)
+                .font(.body.weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
+
+            RemainingUsageProgressBar(remainingPercent: remainingPercent, palette: palette)
+                .padding(.top, 1)
+
+            Text(usageText)
+                .font(.body)
+                .monospacedDigit()
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let resetText {
+                Text(resetText)
                     .font(.body)
                     .foregroundStyle(palette.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
-                    .help(window.resetDescription ?? reset)
+                    .help(resetHelp ?? resetText)
             }
         }
         .foregroundStyle(palette.primaryText)
-        .help(window.usageText)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(window.accessibilityLabel)
+    }
+}
+
+private struct UsageSectionHeading: View {
+    let title: String
+    let palette: StatusMenuPalette
+
+    var body: some View {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(palette.secondaryText)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.bottom, 10)
+    }
+}
+
+private struct UsageSectionDivider: View {
+    let palette: StatusMenuPalette
+
+    var body: some View {
+        Divider()
+            .overlay(palette.divider)
+            .padding(.vertical, 14)
     }
 }
 
@@ -378,10 +437,7 @@ private struct RateLimitCardSectionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if section.isGrouped, section.showsTitle, let title = section.title {
-                Text(title)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(palette.primaryText)
-                    .padding(.bottom, 10)
+                UsageSectionHeading(title: title, palette: palette)
             }
 
             ForEach(Array(section.cards.enumerated()), id: \.offset) { index, card in
@@ -393,17 +449,13 @@ private struct RateLimitCardSectionView: View {
                 )
 
                 if index < section.cards.count - 1 {
-                    Divider()
-                        .overlay(palette.divider)
-                        .padding(.vertical, 14)
+                    UsageSectionDivider(palette: palette)
                 }
             }
         }
 
         if showsSectionDivider {
-            Divider()
-                .overlay(palette.divider)
-                .padding(.vertical, 14)
+            UsageSectionDivider(palette: palette)
         }
     }
 }
@@ -463,20 +515,13 @@ private struct RateLimitCardView: View {
                     .foregroundStyle(palette.primaryText)
             }
 
-            Text(card.popoverTitle(isGroupedByFamily: isGroupedByFamily))
-                .font(.body.weight(isGroupedByFamily || card.isPrimary ? .semibold : .regular))
-                .foregroundStyle(palette.primaryText)
-
-            RateLimitProgressBar(card: card, palette: palette)
-                .padding(.top, 1)
-
-            Text(card.usageText)
-                .font(.body)
-                .foregroundStyle(palette.primaryText)
-
-            Text(card.combinedResetText)
-                .font(.body)
-                .foregroundStyle(palette.primaryText)
+            UsageWindowView(
+                title: card.popoverTitle(isGroupedByFamily: isGroupedByFamily),
+                remainingPercent: card.remainingPercent,
+                usageText: card.usageText,
+                resetText: card.combinedResetText,
+                palette: palette
+            )
 
             if let projection = card.projection {
                 RateLimitProjectionView(projection: projection, palette: palette)
@@ -489,7 +534,6 @@ private struct RateLimitCardView: View {
                     .foregroundStyle(palette.primaryText)
             }
         }
-        .padding(.vertical, card.isPrimary ? 2 : 0)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(card.accessibilityLabel)
     }
@@ -751,15 +795,6 @@ private func statusIconName(for progressState: RateLimitProgressState) -> String
         return "exclamationmark.triangle.fill"
     case .exhausted:
         return "xmark.octagon.fill"
-    }
-}
-
-private struct RateLimitProgressBar: View {
-    let card: RateLimitCardViewData
-    let palette: StatusMenuPalette
-
-    var body: some View {
-        RemainingUsageProgressBar(remainingPercent: card.remainingPercent, palette: palette)
     }
 }
 

@@ -1,3 +1,5 @@
+import Foundation
+
 enum UsageProvider: String, CaseIterable, Sendable {
     case codex
     case claude
@@ -6,6 +8,13 @@ enum UsageProvider: String, CaseIterable, Sendable {
         switch self {
         case .codex: "Codex"
         case .claude: "Claude"
+        }
+    }
+
+    var usageURL: URL {
+        switch self {
+        case .codex: URL(string: "https://chatgpt.com/settings/usage")!
+        case .claude: URL(string: "https://claude.ai/settings/usage")!
         }
     }
 }

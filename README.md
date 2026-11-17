@@ -10,7 +10,7 @@ A small macOS menu bar app that shows remaining Codex and Claude usage.
 - Optionally shows organization-level OpenAI API usage in the popover when you enable the view and configure an `OPENAI_ADMIN_KEY`.
 - Asks which providers to show: Codex, Claude, or both. Each provider gets its own menu bar item and focused usage panel.
 - Shows Claude subscription usage (session, weekly, and model-specific weekly limits) using your signed-in Claude Code CLI.
-- Adds an `Open Codex` button in the popover when the Codex desktop app is installed.
+- Both popovers include `View usage` to open the provider's usage dashboard in your browser.
 - Refreshes Codex automatically on system clock minute boundaries and Claude every five minutes.
 - Supports manual refresh from the menu bar item's right-click menu.
 - Can be installed as a real `.app` and configured to launch at login.
@@ -54,7 +54,7 @@ That quits `CodexToolbar` if it is running, removes its launch-at-login registra
 - On first launch, select Codex, Claude, or both using the visible provider checkboxes. Your choice is remembered. Right-click either item and select `Choose providers…` to change it.
 - Left-click a provider's menu bar item to see that provider's usage panel. With both enabled, the Codex mark and Claude asterisk identify the two items.
 - Enable `Show API usage` from the right-click menu, then use the OpenAI API usage section in the popover after configuring an `OPENAI_ADMIN_KEY`.
-- Use the popover's `Open Codex` button to jump into the Codex desktop app when it is installed locally.
+- Use `View usage` in either popover to open that provider's usage dashboard. `Open Codex` is available in Codex's right-click menu when the desktop app is installed locally.
 - Install a current Claude Code CLI and sign in with `claude auth login` first. The integration was verified with Claude Code 2.1.326; older versions may return only session cost and will show limits as unavailable.
 - Each item's `Refresh now` refreshes its own provider. Codex-specific API, credit, and Spark options appear only in the Codex menu. Launch at login, provider selection, and Quit apply to the app.
 - Use `Launch at login` after running the installed app from `~/Applications`.

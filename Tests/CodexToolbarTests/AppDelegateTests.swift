@@ -4,29 +4,26 @@ import XCTest
 
 @MainActor
 final class AppDelegateTests: XCTestCase {
-    func testPopoverContentShowsOpenCodexButtonWhenInstalledAppExists() {
+    func testCodexContextMenuShowsOpenCodexWhenInstalledAppExists() {
         let delegate = makeDelegate(
             installedApplicationURL: URL(fileURLWithPath: "/Applications/Codex.app"),
             preferences: ToolbarPreferences(defaults: Self.makeDefaults())
         )
 
-        let view = delegate.makeStatusMenuContentView()
-
-        XCTAssertTrue(view.showsOpenCodexButton)
+        XCTAssertTrue(delegate.makeContextMenu(provider: .codex).items.contains { $0.title == "Open Codex" })
+        XCTAssertFalse(delegate.makeContextMenu(provider: .claude).items.contains { $0.title == "Open Codex" })
     }
 
-    func testPopoverContentHidesOpenCodexButtonWhenInstalledAppIsMissing() {
+    func testContextMenuHidesOpenCodexWhenInstalledAppIsMissing() {
         let delegate = makeDelegate(
             installedApplicationURL: nil,
             preferences: ToolbarPreferences(defaults: Self.makeDefaults())
         )
 
-        let view = delegate.makeStatusMenuContentView()
-
-        XCTAssertFalse(view.showsOpenCodexButton)
+        XCTAssertFalse(delegate.makeContextMenu().items.contains { $0.title == "Open Codex" })
     }
 
-    func testOpenCodexActionOpensAppAndClosesPopover() async {
+    func testOpenCodexMenuActionOpensAppAndClosesPopover() async throws {
         let fakeProvider = FakeCodexDesktopAppProvider(installedApplicationURL: URL(fileURLWithPath: "/Applications/Codex.app"))
         let delegate = makeDelegate(
             store: makeNormalStore(),
@@ -38,33 +35,25 @@ final class AppDelegateTests: XCTestCase {
             closeExpectation.fulfill()
         }
 
-        let view = delegate.makeStatusMenuContentView()
-        view.openCodexAction?()
+        let menu = delegate.makeContextMenu()
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Open Codex" })
+        let target = try XCTUnwrap(item.target as? NSObject)
+        let action = try XCTUnwrap(item.action)
+        target.perform(action)
 
         await fulfillment(of: [closeExpectation], timeout: 1)
         XCTAssertEqual(fakeProvider.openCallCount, 1)
     }
 
-    func testScreenshotOverrideShowsOpenCodexButtonWithoutInstalledApp() {
-        let screenshotConfiguration = ScreenshotLaunchConfiguration(
-            scenario: .normal,
-            appearance: .light,
-            outputDirectory: nil,
-            shouldCapturePopover: true,
-            shouldCaptureStatusItem: false,
-            shouldOpenPopover: true,
-            visibleSupplementalFamilyIDs: nil,
-            showsOpenCodexButton: true
-        )
+    func testUsageDestinationsRemainAvailableWithoutInstalledApp() {
         let delegate = makeDelegate(
             installedApplicationURL: nil,
-            preferences: ToolbarPreferences(defaults: Self.makeDefaults()),
-            screenshotConfiguration: screenshotConfiguration
+            preferences: ToolbarPreferences(defaults: Self.makeDefaults())
         )
-
-        let view = delegate.makeStatusMenuContentView()
-
-        XCTAssertTrue(view.showsOpenCodexButton)
+        XCTAssertEqual(delegate.makeStatusMenuContentView(provider: .codex).provider.usageURL.absoluteString,
+                       "https://chatgpt.com/settings/usage")
+        XCTAssertEqual(delegate.makeStatusMenuContentView(provider: .claude).provider.usageURL.absoluteString,
+                       "https://claude.ai/settings/usage")
     }
 
     func testFirstLaunchAsksForProvidersOnceAndPersistsBoth() {
@@ -118,7 +107,7 @@ final class AppDelegateTests: XCTestCase {
             let configuration = ScreenshotLaunchConfiguration(
                 scenario: scenario, appearance: .light, outputDirectory: nil,
                 shouldCapturePopover: true, shouldCaptureStatusItem: false, shouldOpenPopover: true,
-                visibleSupplementalFamilyIDs: nil, showsOpenCodexButton: true
+                visibleSupplementalFamilyIDs: nil
             )
             let delegate = makeDelegate(installedApplicationURL: nil, preferences: preferences,
                                         screenshotConfiguration: configuration, appRuntime: runtime)
@@ -202,7 +191,7 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertFalse(claudeView.displaysCodexContent)
         XCTAssertTrue(claudeView.displaysClaudeContent)
         XCTAssertTrue(claudeView.claudeUsageStore === claudeStore)
-        XCTAssertEqual(codexView.panelTitle, "Codex rate limit status")
+        XCTAssertEqual(codexView.panelTitle, "Codex usage")
         XCTAssertEqual(claudeView.panelTitle, "Claude usage")
     }
 
@@ -218,11 +207,12 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertEqual(delegate.enabledProviders, [.claude])
         XCTAssertFalse(view.displaysCodexContent)
         XCTAssertTrue(view.displaysClaudeContent)
-        XCTAssertFalse(view.showsOpenCodexButton)
-        XCTAssertNil(view.openCodexAction)
         XCTAssertFalse(view.showsCredits)
         XCTAssertFalse(view.showsOpenAIUsage)
-        XCTAssertEqual(delegate.popoverContentSize(for: .claude), NSSize(width: 352, height: 390))
+        let size = delegate.popoverContentSize(for: .claude)
+        XCTAssertEqual(size.width, 352)
+        XCTAssertGreaterThan(size.height, 0)
+        XCTAssertLessThanOrEqual(size.height, StatusMenuContentView.maximumPopoverHeight)
     }
 
     func testClaudeContextMenuExcludesCodexSettingsAndCarriesProviderForRefresh() throws {
@@ -729,8 +719,7 @@ final class AppDelegateTests: XCTestCase {
             shouldCapturePopover: true,
             shouldCaptureStatusItem: false,
             shouldOpenPopover: true,
-            visibleSupplementalFamilyIDs: ["codex_bengalfox"],
-            showsOpenCodexButton: nil
+            visibleSupplementalFamilyIDs: ["codex_bengalfox"]
         )
         let delegate = makeDelegate(
             store: makeSparkStore(),
@@ -746,13 +735,18 @@ final class AppDelegateTests: XCTestCase {
 
     func testPopoverContentSizeExpandsWhenOpenAIUsageIsVisible() {
         let defaults = Self.makeDefaults()
-        defaults.set(true, forKey: "showOpenAIUsage")
+        let preferences = ToolbarPreferences(defaults: defaults)
         let delegate = makeDelegate(
             installedApplicationURL: nil,
-            preferences: ToolbarPreferences(defaults: defaults)
+            preferences: preferences
         )
+        let compactSize = delegate.popoverContentSize
+        preferences.setOpenAIUsageVisible(true)
+        let expandedSize = delegate.popoverContentSize
 
-        XCTAssertEqual(delegate.popoverContentSize, NSSize(width: 352, height: 420))
+        XCTAssertEqual(expandedSize.width, compactSize.width)
+        XCTAssertGreaterThan(expandedSize.height, compactSize.height)
+        XCTAssertLessThanOrEqual(expandedSize.height, StatusMenuContentView.maximumPopoverHeight)
     }
 
     func testPopoverContentSizeStaysCompactWhenOpenAIUsageIsHidden() {
@@ -761,7 +755,38 @@ final class AppDelegateTests: XCTestCase {
             preferences: ToolbarPreferences(defaults: Self.makeDefaults())
         )
 
-        XCTAssertEqual(delegate.popoverContentSize, NSSize(width: 352, height: 300))
+        XCTAssertEqual(delegate.popoverContentSize.width, 352)
+        XCTAssertGreaterThan(delegate.popoverContentSize.height, 0)
+        XCTAssertLessThan(delegate.popoverContentSize.height, 300)
+    }
+
+    func testClaudePopoverFitsThreeWindowsAndCapsLongerContent() {
+        func size(windows: [ClaudeUsageWindow]) -> NSSize {
+            let store = ClaudeUsageStore(
+                client: DelegateClaudeUsageClient(),
+                initialSnapshot: ClaudeUsageSnapshot(windows: windows),
+                initialLastUpdated: ScreenshotScenario.claude.lastUpdated,
+                liveUpdatesEnabled: false
+            )
+            let delegate = makeDelegate(
+                installedApplicationURL: nil,
+                preferences: ToolbarPreferences(defaults: Self.makeDefaults()),
+                claudeUsageStore: store
+            )
+            return delegate.popoverContentSize(for: .claude)
+        }
+        let windows = ScreenshotScenario.claude.claudeUsageSnapshot!.windows
+        let singleSize = size(windows: Array(windows.prefix(1)))
+        let threeWindowSize = size(windows: windows)
+        XCTAssertGreaterThan(threeWindowSize.height, singleSize.height)
+        XCTAssertGreaterThan(threeWindowSize.height, 390, "The old fixed height clipped the model's percentages and reset")
+        XCTAssertLessThan(threeWindowSize.height, StatusMenuContentView.maximumPopoverHeight)
+
+        let manyWindows = (0..<12).map { index in
+            ClaudeUsageWindow(id: "model-\(index)", title: "Weekly (Model \(index))", usedPercent: 10,
+                              resetDescription: "Resets Mar 11 at 1pm (America/Los_Angeles)")
+        }
+        XCTAssertEqual(size(windows: manyWindows).height, StatusMenuContentView.maximumPopoverHeight)
     }
 
     func testReadyStatusItemImageKeepsGlyphTintStableWhileBarColorChanges() throws {

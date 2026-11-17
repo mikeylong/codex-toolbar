@@ -291,7 +291,6 @@ struct ScreenshotLaunchConfiguration: Equatable, Sendable {
     let shouldCaptureStatusItem: Bool
     let shouldOpenPopover: Bool
     let visibleSupplementalFamilyIDs: Set<String>?
-    let showsOpenCodexButton: Bool?
 
     static func current(
         arguments: [String] = ProcessInfo.processInfo.arguments,
@@ -326,10 +325,6 @@ struct ScreenshotLaunchConfiguration: Equatable, Sendable {
                 ?? environment["CODEX_TOOLBAR_SCREENSHOT_OPEN_POPOVER"],
             defaultValue: shouldCapturePopover
         )
-        let showsOpenCodexButton = optionalBoolValue(
-            argumentValue(named: "--screenshot-show-open-codex", arguments: arguments)
-                ?? environment["CODEX_TOOLBAR_SCREENSHOT_SHOW_OPEN_CODEX"]
-        )
         let visibleSupplementalFamilyIDs = familyIDsValue(
             argumentValue(named: "--screenshot-visible-supplemental-families", arguments: arguments)
                 ?? environment["CODEX_TOOLBAR_SCREENSHOT_VISIBLE_SUPPLEMENTAL_FAMILIES"]
@@ -342,8 +337,7 @@ struct ScreenshotLaunchConfiguration: Equatable, Sendable {
             shouldCapturePopover: shouldCapturePopover,
             shouldCaptureStatusItem: shouldCaptureStatusItem,
             shouldOpenPopover: shouldOpenPopover,
-            visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs,
-            showsOpenCodexButton: showsOpenCodexButton
+            visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs
         )
     }
 
@@ -367,21 +361,6 @@ struct ScreenshotLaunchConfiguration: Equatable, Sendable {
             return false
         default:
             return defaultValue
-        }
-    }
-
-    private static func optionalBoolValue(_ value: String?) -> Bool? {
-        guard let value else {
-            return nil
-        }
-
-        switch value.lowercased() {
-        case "1", "true", "yes", "on":
-            return true
-        case "0", "false", "no", "off":
-            return false
-        default:
-            return nil
         }
     }
 
