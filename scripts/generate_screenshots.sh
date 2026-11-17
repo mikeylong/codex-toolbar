@@ -99,15 +99,18 @@ for appearance in light dark; do
   cp "$SCREENSHOTS_DIR/website-$appearance-popover.png" \
     "$ROOT_DIR/site/assets/codextoolbar-tahoe-$appearance.png"
 
+  providers_image="$SCREENSHOTS_DIR/providers-$appearance-status-item.png"
+  rm -f "$providers_image"
   "$APP_EXECUTABLE" --screenshot-scenario providers \
     --screenshot-appearance "$appearance" --screenshot-output-dir "$SCREENSHOTS_DIR" \
     --screenshot-capture-status-item true --screenshot-capture-popover false \
     --screenshot-open-popover false
+  [[ -s "$providers_image" ]] || { echo "Menu bar capture failed: $appearance" >&2; exit 1; }
   chooser_image="$SCREENSHOTS_DIR/provider-chooser-$appearance.png"
   rm -f "$chooser_image"
   open -n -W "$CHOOSER_APP" --args "$appearance" "$chooser_image"
   [[ -s "$chooser_image" ]] || { echo "Chooser capture failed: $appearance" >&2; exit 1; }
-  cp "$SCREENSHOTS_DIR/providers-$appearance-status-item.png" "$ROOT_DIR/site/assets/"
+  cp "$providers_image" "$ROOT_DIR/site/assets/"
   cp "$chooser_image" "$ROOT_DIR/site/assets/"
   cp "$SCREENSHOTS_DIR/readme-claude-$appearance-popover.png" \
     "$ROOT_DIR/site/assets/claude-usage-$appearance.png"
