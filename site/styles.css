@@ -232,6 +232,7 @@ ul {
 
 .menu-bar-example {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   align-content: center;
   gap: var(--space-4);
@@ -245,6 +246,7 @@ ul {
 
 .menu-bar-capture {
   display: block;
+  min-width: 0;
   max-width: 100%;
   width: 21rem;
 }
