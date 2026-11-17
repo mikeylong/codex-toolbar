@@ -10,6 +10,30 @@ README_SCENARIOS=(normal warning critical projection spark claude)
 
 mkdir -p "$SCREENSHOTS_DIR"
 
+# Run this with the normal toolbar closed so duplicate menu bar items do not
+# compete for their saved positions. The chooser preview never changes prefs.
+CHOOSER_APP="$ROOT_DIR/dist/ProviderChooserCapture.app"
+mkdir -p "$CHOOSER_APP/Contents/MacOS" "$CHOOSER_APP/Contents/Resources"
+cat > "$CHOOSER_APP/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleExecutable</key><string>ProviderChooserCapture</string>
+<key>CFBundleIdentifier</key><string>com.mikelong.codextoolbar.chooser-capture</string>
+<key>CFBundleName</key><string>ProviderChooserCapture</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleIconFile</key><string>Codex</string>
+<key>LSUIElement</key><true/>
+<key>NSHighResolutionCapable</key><true/>
+</dict></plist>
+PLIST
+cp "$ROOT_DIR/Resources/Codex.icns" "$CHOOSER_APP/Contents/Resources/Codex.icns"
+swiftc "$ROOT_DIR/Sources/CodexToolbar/Models/UsageProvider.swift" \
+  "$ROOT_DIR/Sources/CodexToolbar/Views/UsageProviderChooser.swift" \
+  "$ROOT_DIR/scripts/capture_provider_chooser.swift" \
+  -o "$CHOOSER_APP/Contents/MacOS/ProviderChooserCapture"
+codesign --force --sign - "$CHOOSER_APP"
+
 generated_files=()
 for appearance in light dark; do
   for scenario in "${README_SCENARIOS[@]}"; do
@@ -74,6 +98,19 @@ for appearance in light dark; do
   run_capture "website" "$appearance"
   cp "$SCREENSHOTS_DIR/website-$appearance-popover.png" \
     "$ROOT_DIR/site/assets/codextoolbar-tahoe-$appearance.png"
+
+  "$APP_EXECUTABLE" --screenshot-scenario providers \
+    --screenshot-appearance "$appearance" --screenshot-output-dir "$SCREENSHOTS_DIR" \
+    --screenshot-capture-status-item true --screenshot-capture-popover false \
+    --screenshot-open-popover false
+  chooser_image="$SCREENSHOTS_DIR/provider-chooser-$appearance.png"
+  rm -f "$chooser_image"
+  open -n -W "$CHOOSER_APP" --args "$appearance" "$chooser_image"
+  [[ -s "$chooser_image" ]] || { echo "Chooser capture failed: $appearance" >&2; exit 1; }
+  cp "$SCREENSHOTS_DIR/providers-$appearance-status-item.png" "$ROOT_DIR/site/assets/"
+  cp "$chooser_image" "$ROOT_DIR/site/assets/"
+  cp "$SCREENSHOTS_DIR/readme-claude-$appearance-popover.png" \
+    "$ROOT_DIR/site/assets/claude-usage-$appearance.png"
 done
 
 echo "Generated screenshots:"

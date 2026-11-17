@@ -1,25 +1,38 @@
 # CodexToolbar
 
-A small macOS menu bar app that shows remaining Codex and Claude usage.
+Codex and Claude usage, in your menu bar. Choose either provider or both, with a separate menu bar item and usage panel for each.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/providers-dark-status-item.png">
+  <img src="screenshots/providers-light-status-item.png" alt="Separate Codex and Claude menu bar items, each showing its own remaining usage" width="288">
+</picture>
+
+Click either item to check remaining usage, reset timing, and that provider's usage dashboard.
+
+| Codex | Claude |
+| --- | --- |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="screenshots/readme-normal-dark-popover.png"><img src="screenshots/readme-normal-light-popover.png" alt="Codex usage panel with a Weekly limit, reset timing, forecast, and View usage action" width="352"></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="screenshots/readme-claude-dark-popover.png"><img src="screenshots/readme-claude-light-popover.png" alt="Claude usage panel with session, weekly, and model-specific limits and View usage action" width="352"></picture> |
+
+Usage screenshots show the v0.1.21 interface with fixed sample values. Images follow your light or dark theme. Available limits depend on your account.
 
 ## What It Does
 
-- Shows a compact progress bar for the most constrained core Codex window in the menu bar, including multi-week windows.
-- Shows a popover with used/remaining percentages, progress bars, and reset timing.
-- Projects from the current 5h and Weekly pace whether tokens will run out before reset.
-- Optionally shows organization-level OpenAI API usage in the popover when you enable the view and configure an `OPENAI_ADMIN_KEY`.
-- Asks which providers to show: Codex, Claude, or both. Each provider gets its own menu bar item and focused usage panel.
-- Shows Claude subscription usage (session, weekly, and model-specific weekly limits) using your signed-in Claude Code CLI.
-- Both popovers include `View usage` to open the provider's usage dashboard in your browser.
-- Refreshes Codex automatically on system clock minute boundaries and Claude every five minutes.
-- Supports manual refresh from the menu bar item's right-click menu.
-- Can be installed as a real `.app` and configured to launch at login.
+- Shows each provider's most constrained core usage window as a compact progress bar in the menu bar.
+- Shows used/remaining percentages, progress bars, and reset timing in each provider's panel.
+- Reads Codex limits, including multi-week windows, and projects whether usage will run out before reset from the current 5h and Weekly pace.
+- Reads Claude subscription limits: session, weekly, and model-specific weekly usage, using your signed-in Claude Code CLI.
+- Opens the corresponding usage dashboard with `View usage` in either panel.
+- Refreshes Codex automatically on system clock minute boundaries and Claude every five minutes. Right-click either item for `Refresh now`.
+- Offers optional Codex Spark limits and organization-level OpenAI API usage. API usage requires enabling the view and configuring an `OPENAI_ADMIN_KEY`.
+- Remembers your provider selection and supports launch at login.
 
 ## Requirements
 
-- macOS 14+
-- For Codex usage: Codex CLI installed locally and signed in on the same Mac
-- For Claude usage: a current Claude Code CLI, signed in with a Claude subscription
+- macOS 14 or later.
+- **For Codex:** Codex CLI installed locally and signed in on the same Mac.
+- **For Claude:** a current Claude Code CLI, signed in with a Claude subscription.
+
+You only need the CLI for the provider you choose. To display both providers, install and sign in to both CLIs.
 
 ## Install
 
@@ -27,7 +40,7 @@ A small macOS menu bar app that shows remaining Codex and Claude usage.
 
 [Download the latest DMG from GitHub Releases](https://github.com/mikeylong/codex-toolbar/releases/latest)
 
-Open the DMG, drag `CodexToolbar.app` into `Applications`, and launch it from there.
+Open the DMG, drag `CodexToolbar.app` into `Applications`, and launch it from there. Select Codex, Claude, or both when the provider chooser appears, then click `Show usage`.
 
 ### Build from source
 
@@ -49,36 +62,39 @@ That installs `CodexToolbar.app` to `~/Applications` and opens it.
 
 That quits `CodexToolbar` if it is running, removes its launch-at-login registration, and deletes `~/Applications/CodexToolbar.app`.
 
+## Choose providers
+
+Select either provider or both using the visible checkboxes. Your choice is remembered. Right-click either menu bar item and select `Choose providers…` to change it later.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/provider-chooser-dark.png">
+  <img src="screenshots/provider-chooser-light.png" alt="Provider chooser with visible Codex and Claude checkboxes and a Show usage button" width="400">
+</picture>
+
 ## Use
 
-- On first launch, select Codex, Claude, or both using the visible provider checkboxes. Your choice is remembered. Right-click either item and select `Choose providers…` to change it.
-- Left-click a provider's menu bar item to see that provider's usage panel. With both enabled, the Codex mark and Claude asterisk identify the two items.
-- Enable `Show API usage` from the right-click menu, then use the OpenAI API usage section in the popover after configuring an `OPENAI_ADMIN_KEY`.
-- Use `View usage` in either popover to open that provider's usage dashboard. `Open Codex` is available in Codex's right-click menu when the desktop app is installed locally.
+- Left-click a provider's menu bar item to see its usage panel. With both enabled, the Codex mark and Claude asterisk identify the two items.
+- Use `View usage` in either panel to open that provider's usage dashboard. `Open Codex` is available in Codex's right-click menu when the desktop app is installed locally.
 - Install a current Claude Code CLI and sign in with `claude auth login` first. The integration was verified with Claude Code 2.1.326; older versions may return only session cost and will show limits as unavailable.
 - Each item's `Refresh now` refreshes its own provider. Codex-specific API, credit, and Spark options appear only in the Codex menu. Launch at login, provider selection, and Quit apply to the app.
-- Use `Launch at login` after running the installed app from `~/Applications`.
+- Enable `Show API usage` from the Codex right-click menu, then use the OpenAI API usage section after configuring an `OPENAI_ADMIN_KEY`.
+- Use `Launch at login` after running the installed app from `Applications`.
 
-## Screenshots
+## More Codex examples
 
-Captured from v0.1.18 with fixed sample values. The default examples show a Weekly Codex window; the optional Spark example adds separately labeled 5h and Weekly windows. Available windows depend on what Codex reports for your account. The website uses a separate Weekly scenario with a same-day reset so the image shows relative timing instead of a calendar date.
+<details>
+<summary>Warning, critical, projection, and Spark screenshots</summary>
 
-| Theme | Normal | Warning | Critical | Projection |
-| --- | --- | --- | --- | --- |
-| Light | ![Normal light mode status popover](screenshots/readme-normal-light-popover.png) | ![Warning light mode status popover](screenshots/readme-warning-light-popover.png) | ![Critical light mode status popover](screenshots/readme-critical-light-popover.png) | ![Projection light mode status popover](screenshots/readme-projection-light-popover.png) |
-| Dark | ![Normal dark mode status popover](screenshots/readme-normal-dark-popover.png) | ![Warning dark mode status popover](screenshots/readme-warning-dark-popover.png) | ![Critical dark mode status popover](screenshots/readme-critical-dark-popover.png) | ![Projection dark mode status popover](screenshots/readme-projection-dark-popover.png) |
+These v0.1.21 examples use fixed sample values. Spark adds separately labeled 5h and Weekly windows when available for your account.
 
-With Spark usage enabled:
-
-| Light | Dark |
+| Example | Preview |
 | --- | --- |
-| ![Weekly Codex usage with separate Spark 5h and Weekly limits in light mode](screenshots/readme-spark-light-popover.png) | ![Weekly Codex usage with separate Spark 5h and Weekly limits in dark mode](screenshots/readme-spark-dark-popover.png) |
+| Warning | <picture><source media="(prefers-color-scheme: dark)" srcset="screenshots/readme-warning-dark-popover.png"><img src="screenshots/readme-warning-light-popover.png" alt="Codex warning usage state" width="352"></picture> |
+| Critical | <picture><source media="(prefers-color-scheme: dark)" srcset="screenshots/readme-critical-dark-popover.png"><img src="screenshots/readme-critical-light-popover.png" alt="Codex critical usage state" width="352"></picture> |
+| Projection | <picture><source media="(prefers-color-scheme: dark)" srcset="screenshots/readme-projection-dark-popover.png"><img src="screenshots/readme-projection-light-popover.png" alt="Codex usage projection before reset" width="352"></picture> |
+| Spark | <picture><source media="(prefers-color-scheme: dark)" srcset="screenshots/readme-spark-dark-popover.png"><img src="screenshots/readme-spark-light-popover.png" alt="Codex Weekly usage with separate Spark 5h and Weekly limits" width="352"></picture> |
 
-Claude's separate panel in v0.1.20, with fixed sample values:
-
-| Light | Dark |
-| --- | --- |
-| ![Claude usage with session, weekly, and model-specific limits in light mode](screenshots/readme-claude-light-popover.png) | ![Claude usage with session, weekly, and model-specific limits in dark mode](screenshots/readme-claude-dark-popover.png) |
+</details>
 
 ## Notes
 
@@ -90,6 +106,8 @@ Claude's separate panel in v0.1.20, with fixed sample values:
 - Claude runs the built-in `/usage` command in noninteractive JSON mode with tools, hooks, MCP servers, session persistence, and auto-updates disabled for the probe. The app uses Claude's existing sign-in; it does not read or store Claude tokens. Only quota rows are displayed; local usage insights are neither displayed nor saved. No model prompt is sent.
 
 ## Development
+
+Quit the running toolbar before generating screenshots so its menu bar items do not overlap the sample items. The chooser capture uses the production native controls on a solid background for legibility.
 
 ```bash
 swift test
