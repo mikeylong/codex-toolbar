@@ -211,7 +211,14 @@ ul {
 .install-grid,
 .chooser-grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
+}
+
+.hero-grid > *,
+.install-grid > *,
+.chooser-grid > * {
+  min-width: 0;
 }
 
 .hero-grid {
@@ -313,6 +320,7 @@ ul {
 
 .setup-options {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
 }
 
@@ -397,6 +405,7 @@ section[id] {
 
 .install-options {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
 }
 
@@ -415,6 +424,7 @@ section[id] {
 .install-grid > div,
 .footer-inner {
   display: grid;
+  min-width: 0;
   gap: var(--space-2);
   align-content: start;
 }
