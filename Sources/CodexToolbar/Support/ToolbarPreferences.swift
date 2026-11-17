@@ -8,6 +8,7 @@ final class ToolbarPreferences {
         static let visibleSupplementalFamilyPrefix = "visibleSupplementalFamily."
         static let showCredits = "showCredits"
         static let showOpenAIUsage = "showOpenAIUsage"
+        static let usageProviderSelection = "usageProviderSelection"
         static let gitUpdateRepositoryRoot = "gitUpdate.repositoryRoot"
         static let gitUpdateRemoteName = "gitUpdate.remoteName"
         static let gitUpdateBranchName = "gitUpdate.branchName"
@@ -17,6 +18,15 @@ final class ToolbarPreferences {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+    }
+
+    var usageProviderSelection: UsageProviderSelection? {
+        guard let value = defaults.string(forKey: Keys.usageProviderSelection) else { return nil }
+        return UsageProviderSelection(rawValue: value)
+    }
+
+    func setUsageProviderSelection(_ selection: UsageProviderSelection) {
+        defaults.set(selection.rawValue, forKey: Keys.usageProviderSelection)
     }
 
     func isSupplementalFamilyVisible(_ family: SupplementalLimitFamily) -> Bool {

@@ -82,10 +82,11 @@ final class RateLimitStore {
 
         guard liveUpdatesEnabled else { return }
 
+        let events = client.events()
         eventTask = Task { [weak self] in
             guard let self else { return }
-            let events = client.events()
             for await event in events {
+                guard !Task.isCancelled else { return }
                 await handle(event: event)
             }
         }

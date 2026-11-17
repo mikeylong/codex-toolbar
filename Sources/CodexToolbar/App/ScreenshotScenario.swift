@@ -50,6 +50,10 @@ struct ScreenshotScenario: Equatable, Sendable {
             return website
         case "spark":
             return spark
+        case "claude":
+            return claude
+        case "providers":
+            return providers
         default:
             return nil
         }
@@ -115,6 +119,40 @@ struct ScreenshotScenario: Equatable, Sendable {
             timeZone: pacificTimeZone
         )
     }()
+
+    static let claude = ScreenshotScenario(
+        name: "claude",
+        snapshot: normal.snapshot,
+        rateLimitsByLimitId: nil,
+        now: normal.now,
+        lastUpdated: normal.lastUpdated,
+        calendar: normal.calendar,
+        locale: normal.locale,
+        timeZone: normal.timeZone
+    )
+
+    static let providers = ScreenshotScenario(
+        name: "providers",
+        snapshot: critical.snapshot,
+        rateLimitsByLimitId: nil,
+        now: critical.now,
+        lastUpdated: critical.lastUpdated,
+        calendar: critical.calendar,
+        locale: critical.locale,
+        timeZone: critical.timeZone
+    )
+
+    var claudeUsageSnapshot: ClaudeUsageSnapshot? {
+        guard name == "claude" || name == "providers" else { return nil }
+        return ClaudeUsageSnapshot(windows: [
+            ClaudeUsageWindow(id: "session", title: "Session", usedPercent: 23,
+                              resetDescription: "Resets Mar 8 at 3pm (America/Los_Angeles)"),
+            ClaudeUsageWindow(id: "weekly", title: "Weekly", usedPercent: 63,
+                              resetDescription: "Resets Mar 11 at 1pm (America/Los_Angeles)"),
+            ClaudeUsageWindow(id: "weekly-fable", title: "Weekly (Fable)", usedPercent: 100,
+                              resetDescription: "Resets Mar 11 at 1pm (America/Los_Angeles)")
+        ])
+    }
 
     static let warning: ScreenshotScenario = {
         let now = date(year: 2026, month: 3, day: 8, hour: 14, minute: 11)

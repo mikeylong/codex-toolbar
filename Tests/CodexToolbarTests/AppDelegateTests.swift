@@ -67,6 +67,256 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertTrue(view.showsOpenCodexButton)
     }
 
+    func testFirstLaunchAsksForProvidersOnceAndPersistsBoth() {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        let runtime = FakeAppRuntimeController()
+        runtime.providerChoice = .both
+        let delegate = makeDelegate(installedApplicationURL: nil, preferences: preferences, appRuntime: runtime)
+
+        XCTAssertTrue(delegate.configureProviderSelectionIfNeeded())
+        XCTAssertEqual(preferences.usageProviderSelection, .both)
+        XCTAssertEqual(delegate.enabledProviders, [.codex, .claude])
+        XCTAssertEqual(runtime.providerChoiceCallCount, 1)
+        XCTAssertNil(runtime.previousProviderChoices[0])
+        XCTAssertTrue(delegate.configureProviderSelectionIfNeeded())
+        XCTAssertEqual(runtime.providerChoiceCallCount, 1)
+
+        let nextLaunch = makeDelegate(installedApplicationURL: nil, preferences: preferences, appRuntime: runtime)
+        XCTAssertTrue(nextLaunch.configureProviderSelectionIfNeeded())
+        XCTAssertEqual(runtime.providerChoiceCallCount, 1)
+        XCTAssertEqual(nextLaunch.enabledProviders, [.codex, .claude])
+    }
+
+    func testCancellingFirstLaunchDoesNotPersistASelection() {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        let runtime = FakeAppRuntimeController()
+        let delegate = makeDelegate(installedApplicationURL: nil, preferences: preferences, appRuntime: runtime)
+
+        XCTAssertFalse(delegate.configureProviderSelectionIfNeeded())
+        XCTAssertNil(preferences.usageProviderSelection)
+        XCTAssertEqual(runtime.providerChoiceCallCount, 1)
+    }
+
+    func testExistingClaudeSelectionBypassesFirstLaunchPrompt() {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        preferences.setUsageProviderSelection(.claude)
+        let runtime = FakeAppRuntimeController()
+        runtime.providerChoice = .codex
+        let delegate = makeDelegate(installedApplicationURL: nil, preferences: preferences, appRuntime: runtime)
+
+        XCTAssertTrue(delegate.configureProviderSelectionIfNeeded())
+        XCTAssertEqual(delegate.enabledProviders, [.claude])
+        XCTAssertEqual(preferences.usageProviderSelection, .claude)
+        XCTAssertEqual(runtime.providerChoiceCallCount, 0)
+    }
+
+    func testScreenshotsSelectTheirProviderWithoutPromptingOrPersistingSelection() {
+        for (scenario, provider) in [(ScreenshotScenario.normal, UsageProvider.codex), (.claude, .claude)] {
+            let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+            let runtime = FakeAppRuntimeController()
+            runtime.providerChoice = .both
+            let configuration = ScreenshotLaunchConfiguration(
+                scenario: scenario, appearance: .light, outputDirectory: nil,
+                shouldCapturePopover: true, shouldCaptureStatusItem: false, shouldOpenPopover: true,
+                visibleSupplementalFamilyIDs: nil, showsOpenCodexButton: true
+            )
+            let delegate = makeDelegate(installedApplicationURL: nil, preferences: preferences,
+                                        screenshotConfiguration: configuration, appRuntime: runtime)
+
+            XCTAssertTrue(delegate.configureProviderSelectionIfNeeded())
+            XCTAssertEqual(runtime.providerChoiceCallCount, 0)
+            XCTAssertNil(preferences.usageProviderSelection)
+            XCTAssertEqual(delegate.enabledProviders, [provider])
+        }
+    }
+
+    func testStartupDiagnosticsUsesCodexWithoutChangingSavedClaudeSelection() {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        preferences.setUsageProviderSelection(.claude)
+        let runtime = FakeAppRuntimeController()
+        runtime.providerChoice = .both
+        let diagnostics = StartupDiagnosticsConfiguration(
+            outputPath: FileManager.default.temporaryDirectory.appendingPathComponent("codextoolbar-test-diagnostics.json").path,
+            terminateAfterFirstReport: true
+        )
+        let delegate = makeDelegate(installedApplicationURL: nil, preferences: preferences,
+                                    startupDiagnosticsConfiguration: diagnostics, appRuntime: runtime)
+
+        XCTAssertTrue(delegate.configureProviderSelectionIfNeeded())
+        XCTAssertEqual(delegate.enabledProviders, [.codex])
+        XCTAssertEqual(runtime.providerChoiceCallCount, 0)
+        XCTAssertEqual(preferences.usageProviderSelection, .claude)
+    }
+
+    func testSwitchingToBothStartsClaudeWhileEarlierCodexStartIsStillPending() async {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        preferences.setUsageProviderSelection(.codex)
+        let snapshotGate = DelegateSnapshotGate()
+        let codexClient = FakeStatusItemRateLimitClient(snapshotGate: snapshotGate)
+        let codexStore = RateLimitStore(client: codexClient, refreshDelayNanosecondsProvider: { 3_600_000_000_000 })
+        let claudeClient = DelegateClaudeUsageClient()
+        let claudeStore = ClaudeUsageStore(client: claudeClient)
+        let delegate = makeDelegate(
+            store: codexStore, claudeUsageStore: claudeStore,
+            codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: nil), preferences: preferences
+        )
+        delegate.synchronizeProviderLifecycle()
+        for _ in 0..<100 {
+            if await snapshotGate.isWaiting { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        let codexStarted = await snapshotGate.isWaiting
+        XCTAssertTrue(codexStarted)
+
+        preferences.setUsageProviderSelection(.both)
+        delegate.synchronizeProviderLifecycle()
+        for _ in 0..<100 {
+            if await claudeClient.callCount > 0 { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        let claudeReads = await claudeClient.callCount
+        let codexStillPending = await snapshotGate.isWaiting
+        XCTAssertEqual(claudeReads, 1, "Claude startup must not wait for the earlier Codex lifecycle task")
+        XCTAssertTrue(codexStillPending)
+
+        // Let every pending lifecycle operation unwind without leaving timers or
+        // a suspended snapshot behind, even if either assertion above fails.
+        preferences.setUsageProviderSelection(.claude)
+        await snapshotGate.release()
+        await codexStore.stop()
+        await claudeStore.stop()
+    }
+
+    func testBothProvidersHaveSeparatePopoverContent() {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        preferences.setUsageProviderSelection(.both)
+        let claudeStore = ClaudeUsageStore(client: DelegateClaudeUsageClient())
+        let delegate = makeDelegate(installedApplicationURL: nil, preferences: preferences, claudeUsageStore: claudeStore)
+
+        let codexView = delegate.makeStatusMenuContentView(provider: .codex)
+        let claudeView = delegate.makeStatusMenuContentView(provider: .claude)
+        XCTAssertEqual(delegate.enabledProviders, [.codex, .claude])
+        XCTAssertTrue(codexView.displaysCodexContent)
+        XCTAssertFalse(codexView.displaysClaudeContent)
+        XCTAssertNil(codexView.claudeUsageStore)
+        XCTAssertFalse(claudeView.displaysCodexContent)
+        XCTAssertTrue(claudeView.displaysClaudeContent)
+        XCTAssertTrue(claudeView.claudeUsageStore === claudeStore)
+        XCTAssertEqual(codexView.panelTitle, "Codex rate limit status")
+        XCTAssertEqual(claudeView.panelTitle, "Claude usage")
+    }
+
+    func testClaudeOnlyPopoverExcludesCodexActionsCreditsAndAPIUsage() {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        preferences.setUsageProviderSelection(.claude)
+        preferences.setCreditsVisible(true)
+        preferences.setOpenAIUsageVisible(true)
+        let delegate = makeDelegate(installedApplicationURL: URL(fileURLWithPath: "/Applications/Codex.app"),
+                                    preferences: preferences)
+
+        let view = delegate.makeStatusMenuContentView(provider: .claude)
+        XCTAssertEqual(delegate.enabledProviders, [.claude])
+        XCTAssertFalse(view.displaysCodexContent)
+        XCTAssertTrue(view.displaysClaudeContent)
+        XCTAssertFalse(view.showsOpenCodexButton)
+        XCTAssertNil(view.openCodexAction)
+        XCTAssertFalse(view.showsCredits)
+        XCTAssertFalse(view.showsOpenAIUsage)
+        XCTAssertEqual(delegate.popoverContentSize(for: .claude), NSSize(width: 352, height: 390))
+    }
+
+    func testClaudeContextMenuExcludesCodexSettingsAndCarriesProviderForRefresh() throws {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        preferences.setUsageProviderSelection(.both)
+        let delegate = makeDelegate(installedApplicationURL: nil, preferences: preferences)
+        let claudeMenu = delegate.makeContextMenu(provider: .claude)
+        let titles = claudeMenu.items.map(\.title)
+        XCTAssertTrue(titles.contains("Choose providers…"))
+        XCTAssertFalse(titles.contains("Show Claude usage"))
+        for excluded in ["Show credits", "Show API usage", "Show GPT-5.3-Codex-Spark",
+                         "Configure OpenAI admin key…", "Remove OpenAI admin key"] {
+            XCTAssertFalse(titles.contains(excluded))
+        }
+        XCTAssertEqual(try XCTUnwrap(claudeMenu.items.first { $0.title == "Refresh now" }).representedObject as? String, "claude")
+        let codexMenu = delegate.makeContextMenu(provider: .codex)
+        XCTAssertEqual(try XCTUnwrap(codexMenu.items.first { $0.title == "Refresh now" }).representedObject as? String, "codex")
+    }
+
+    func testCancellingProviderChooserKeepsExistingSelection() throws {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        preferences.setUsageProviderSelection(.both)
+        let runtime = FakeAppRuntimeController()
+        let delegate = makeDelegate(installedApplicationURL: nil, preferences: preferences, appRuntime: runtime)
+        let item = try XCTUnwrap(delegate.makeContextMenu(provider: .claude).items.first { $0.title == "Choose providers…" })
+        let target = try XCTUnwrap(item.target as? NSObject)
+
+        target.perform(try XCTUnwrap(item.action))
+
+        XCTAssertEqual(runtime.providerChoiceCallCount, 1)
+        XCTAssertEqual(runtime.previousProviderChoices, [.both])
+        XCTAssertEqual(preferences.usageProviderSelection, .both)
+        XCTAssertEqual(delegate.enabledProviders, [.codex, .claude])
+    }
+
+    func testManualRefreshIsIndependentForEachProvider() async {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        preferences.setUsageProviderSelection(.both)
+        preferences.setOpenAIUsageVisible(true)
+        let claudeClient = DelegateClaudeUsageClient()
+        let codexClient = FakeStatusItemRateLimitClient()
+        let apiClient = FakeOpenAIUsageClient()
+        let delegate = makeDelegate(
+            store: RateLimitStore(client: codexClient, liveUpdatesEnabled: false),
+            openAIUsageStore: makeOpenAIUsageStore(isEnabled: true, adminKey: "test-key", client: apiClient),
+            claudeUsageStore: ClaudeUsageStore(client: claudeClient),
+            codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: nil), preferences: preferences
+        )
+
+        await delegate.refreshUsage(for: .codex)
+        let claudeCountAfterCodex = await claudeClient.callCount
+        XCTAssertEqual(claudeCountAfterCodex, 0)
+        XCTAssertEqual(codexClient.loadSnapshotCallCount, 1)
+        XCTAssertEqual(apiClient.costsCallCount, 1)
+
+        await delegate.refreshUsage(for: .claude)
+        let claudeCountAfterClaude = await claudeClient.callCount
+        XCTAssertEqual(claudeCountAfterClaude, 1)
+        XCTAssertEqual(codexClient.loadSnapshotCallCount, 1)
+        XCTAssertEqual(apiClient.costsCallCount, 1)
+    }
+
+    func testClaudeRefreshMenuActionDispatchesToClaudeInsteadOfCodex() async throws {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        preferences.setUsageProviderSelection(.both)
+        let claudeClient = DelegateClaudeUsageClient()
+        let codexClient = FakeStatusItemRateLimitClient()
+        let delegate = makeDelegate(
+            store: RateLimitStore(client: codexClient, liveUpdatesEnabled: false),
+            claudeUsageStore: ClaudeUsageStore(client: claudeClient),
+            codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: nil), preferences: preferences
+        )
+        let item = try XCTUnwrap(delegate.makeContextMenu(provider: .claude).items.first { $0.title == "Refresh now" })
+        let target = try XCTUnwrap(item.target as? NSObject)
+        target.perform(try XCTUnwrap(item.action), with: item)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        let claudeCount = await claudeClient.callCount
+        XCTAssertEqual(claudeCount, 1)
+        XCTAssertEqual(codexClient.loadSnapshotCallCount, 0)
+    }
+
+    func testManualRefreshDoesNotRunDisabledProvider() async {
+        let preferences = ToolbarPreferences(defaults: Self.makeDefaults())
+        preferences.setUsageProviderSelection(.claude)
+        let codexClient = FakeStatusItemRateLimitClient()
+        let delegate = makeDelegate(
+            store: RateLimitStore(client: codexClient, liveUpdatesEnabled: false),
+            codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: nil), preferences: preferences
+        )
+        await delegate.refreshUsage(for: .codex)
+        XCTAssertEqual(codexClient.loadSnapshotCallCount, 0)
+    }
+
     func testContextMenuIncludesSupplementalFamilyToggleAndDisabledVersionItemAboveQuit() {
         let delegate = makeDelegate(
             installedApplicationURL: nil,
@@ -75,7 +325,7 @@ final class AppDelegateTests: XCTestCase {
 
         let menu = delegate.makeContextMenu()
 
-        XCTAssertEqual(menu.items.count, 11)
+        XCTAssertEqual(menu.items.count, 12)
         XCTAssertEqual(menu.items[0].title, "Refresh now")
         XCTAssertTrue(
             menu.items[1].title == "Launch at login" ||
@@ -87,14 +337,15 @@ final class AppDelegateTests: XCTestCase {
         XCTAssertEqual(menu.items[3].state, NSControl.StateValue.off)
         XCTAssertEqual(menu.items[4].title, "Show API usage")
         XCTAssertEqual(menu.items[4].state, NSControl.StateValue.off)
-        XCTAssertTrue(menu.items[5].isSeparatorItem)
-        XCTAssertEqual(menu.items[6].title, "Configure OpenAI admin key…")
-        XCTAssertEqual(menu.items[7].title, "Remove OpenAI admin key")
-        XCTAssertFalse(menu.items[7].isEnabled)
-        XCTAssertTrue(menu.items[8].isSeparatorItem)
-        XCTAssertEqual(menu.items[9].title, "Version \(AppVersion.current)")
-        XCTAssertFalse(menu.items[9].isEnabled)
-        XCTAssertEqual(menu.items[10].title, "Quit")
+        XCTAssertEqual(menu.items[5].title, "Choose providers…")
+        XCTAssertTrue(menu.items[6].isSeparatorItem)
+        XCTAssertEqual(menu.items[7].title, "Configure OpenAI admin key…")
+        XCTAssertEqual(menu.items[8].title, "Remove OpenAI admin key")
+        XCTAssertFalse(menu.items[8].isEnabled)
+        XCTAssertTrue(menu.items[9].isSeparatorItem)
+        XCTAssertEqual(menu.items[10].title, "Version \(AppVersion.current)")
+        XCTAssertFalse(menu.items[10].isEnabled)
+        XCTAssertEqual(menu.items[11].title, "Quit")
     }
 
     func testContextMenuShowsUpdateItemsAboveVersionWhenUpdateIsAvailable() {
@@ -112,13 +363,13 @@ final class AppDelegateTests: XCTestCase {
 
         let menu = delegate.makeContextMenu()
 
-        XCTAssertEqual(menu.items.count, 13)
-        XCTAssertEqual(menu.items[9].title, "Update available: v0.1.4")
-        XCTAssertFalse(menu.items[9].isEnabled)
-        XCTAssertEqual(menu.items[10].title, "Install update")
-        XCTAssertTrue(menu.items[10].isEnabled)
-        XCTAssertEqual(menu.items[11].title, "Version \(AppVersion.current)")
-        XCTAssertEqual(menu.items[12].title, "Quit")
+        XCTAssertEqual(menu.items.count, 14)
+        XCTAssertEqual(menu.items[10].title, "Update available: v0.1.4")
+        XCTAssertFalse(menu.items[10].isEnabled)
+        XCTAssertEqual(menu.items[11].title, "Install update")
+        XCTAssertTrue(menu.items[11].isEnabled)
+        XCTAssertEqual(menu.items[12].title, "Version \(AppVersion.current)")
+        XCTAssertEqual(menu.items[13].title, "Quit")
     }
 
     func testContextMenuShowsDownloadUpdateForReleaseBasedInstall() {
@@ -139,8 +390,8 @@ final class AppDelegateTests: XCTestCase {
 
         let menu = delegate.makeContextMenu()
 
-        XCTAssertEqual(menu.items[9].title, "Update available: v0.1.4")
-        XCTAssertEqual(menu.items[10].title, "Download update")
+        XCTAssertEqual(menu.items[10].title, "Update available: v0.1.4")
+        XCTAssertEqual(menu.items[11].title, "Download update")
     }
 
     func testContextMenuSupplementalFamilyToggleReflectsEnabledPreference() {
@@ -244,12 +495,12 @@ final class AppDelegateTests: XCTestCase {
 
         let menu = delegate.makeContextMenu()
 
-        XCTAssertEqual(menu.items.count, 11)
-        XCTAssertTrue(menu.items[5].isSeparatorItem)
-        XCTAssertEqual(menu.items[6].title, "Configure OpenAI admin key…")
-        XCTAssertEqual(menu.items[7].title, "Remove OpenAI admin key")
-        XCTAssertFalse(menu.items[7].isEnabled)
-        XCTAssertTrue(menu.items[8].isSeparatorItem)
+        XCTAssertEqual(menu.items.count, 12)
+        XCTAssertTrue(menu.items[6].isSeparatorItem)
+        XCTAssertEqual(menu.items[7].title, "Configure OpenAI admin key…")
+        XCTAssertEqual(menu.items[8].title, "Remove OpenAI admin key")
+        XCTAssertFalse(menu.items[8].isEnabled)
+        XCTAssertTrue(menu.items[9].isSeparatorItem)
     }
 
     func testContextMenuOpenAIUsageActionsEnableWhenAdminKeyExists() {
@@ -262,7 +513,7 @@ final class AppDelegateTests: XCTestCase {
 
         let menu = delegate.makeContextMenu()
 
-        XCTAssertTrue(menu.items[7].isEnabled)
+        XCTAssertTrue(menu.items[8].isEnabled)
     }
 
     func testRefreshNowSkipsOpenAIUsageWhenAPIUsageIsHidden() async throws {
@@ -302,7 +553,7 @@ final class AppDelegateTests: XCTestCase {
         let refreshItem = try XCTUnwrap(menu.items.first { $0.title == "Refresh now" })
         let target = try XCTUnwrap(refreshItem.target as? NSObject)
 
-        target.perform(try XCTUnwrap(refreshItem.action))
+        target.perform(try XCTUnwrap(refreshItem.action), with: refreshItem)
         try await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertEqual(rateLimitClient.loadSnapshotCallCount, 1)
@@ -353,7 +604,7 @@ final class AppDelegateTests: XCTestCase {
         let refreshItem = try XCTUnwrap(menu.items.first { $0.title == "Refresh now" })
         let target = try XCTUnwrap(refreshItem.target as? NSObject)
 
-        target.perform(try XCTUnwrap(refreshItem.action))
+        target.perform(try XCTUnwrap(refreshItem.action), with: refreshItem)
         try await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertEqual(rateLimitClient.loadSnapshotCallCount, 1)
@@ -604,7 +855,7 @@ final class AppDelegateTests: XCTestCase {
 
         delegate.updateStatusItemButton(button)
 
-        XCTAssertEqual(button.toolTip, "50% remaining")
+        XCTAssertEqual(button.toolTip, "Codex · 50% remaining")
         XCTAssertEqual(button.title, "")
         XCTAssertEqual(button.accessibilityLabel(), "Codex toolbar. Weekly limit status open. 50% remaining.")
     }
@@ -630,7 +881,7 @@ final class AppDelegateTests: XCTestCase {
 
         delegate.updateStatusItemButton(button)
 
-        XCTAssertEqual(button.toolTip, "Codex CLI not found.")
+        XCTAssertEqual(button.toolTip, "Codex · Codex CLI not found.")
         XCTAssertEqual(button.title, "!")
         XCTAssertEqual(button.accessibilityLabel(), "Codex toolbar. Codex CLI not found.")
     }
@@ -685,15 +936,19 @@ final class AppDelegateTests: XCTestCase {
         installedApplicationURL: URL?,
         preferences: ToolbarPreferences,
         screenshotConfiguration: ScreenshotLaunchConfiguration? = nil,
+        startupDiagnosticsConfiguration: StartupDiagnosticsConfiguration? = nil,
         openAIUsageStore: OpenAIUsageStore? = nil,
+        claudeUsageStore: ClaudeUsageStore? = nil,
         appRuntime: any AppRuntimeControlling = FakeAppRuntimeController()
     ) -> AppDelegate {
         makeDelegate(
             store: makeNormalStore(),
             openAIUsageStore: openAIUsageStore ?? makeOpenAIUsageStore(isEnabled: true),
+            claudeUsageStore: claudeUsageStore ?? ClaudeUsageStore(client: DelegateClaudeUsageClient()),
             codexDesktopAppProvider: FakeCodexDesktopAppProvider(installedApplicationURL: installedApplicationURL),
             preferences: preferences,
             screenshotConfiguration: screenshotConfiguration,
+            startupDiagnosticsConfiguration: startupDiagnosticsConfiguration,
             appRuntime: appRuntime
         )
     }
@@ -701,22 +956,25 @@ final class AppDelegateTests: XCTestCase {
     private func makeDelegate(
         store: RateLimitStore,
         openAIUsageStore: OpenAIUsageStore? = nil,
+        claudeUsageStore: ClaudeUsageStore? = nil,
         codexDesktopAppProvider: any CodexDesktopAppProviding,
         preferences: ToolbarPreferences,
         screenshotConfiguration: ScreenshotLaunchConfiguration? = nil,
+        startupDiagnosticsConfiguration: StartupDiagnosticsConfiguration? = nil,
         gitUpdateController: GitUpdateController? = nil,
         appRuntime: any AppRuntimeControlling = FakeAppRuntimeController()
     ) -> AppDelegate {
         AppDelegate(
             store: store,
             openAIUsageStore: openAIUsageStore ?? makeOpenAIUsageStore(isEnabled: true),
+            claudeUsageStore: claudeUsageStore ?? ClaudeUsageStore(client: DelegateClaudeUsageClient()),
             loginItemController: LoginItemController(service: FakeLoginItemService()),
             gitUpdateController: gitUpdateController ?? makeGitUpdateController(preferences: preferences),
             codexDesktopAppProvider: codexDesktopAppProvider,
             preferences: preferences,
             maintenanceLaunchConfiguration: nil,
             screenshotConfiguration: screenshotConfiguration,
-            startupDiagnosticsConfiguration: nil,
+            startupDiagnosticsConfiguration: startupDiagnosticsConfiguration,
             appRuntime: appRuntime
         )
     }
@@ -942,6 +1200,11 @@ private struct FakeLoginItemService: LoginItemService {
 
 private final class FakeStatusItemRateLimitClient: @unchecked Sendable, CodexRateLimitClient {
     private(set) var loadSnapshotCallCount = 0
+    private let snapshotGate: DelegateSnapshotGate?
+
+    init(snapshotGate: DelegateSnapshotGate? = nil) {
+        self.snapshotGate = snapshotGate
+    }
 
     func events() -> AsyncStream<CodexAppServerEvent> {
         AsyncStream { continuation in
@@ -966,6 +1229,7 @@ private final class FakeStatusItemRateLimitClient: @unchecked Sendable, CodexRat
 
     func loadSnapshot(refreshToken: Bool) async throws -> (GetAccountResponse, GetAccountRateLimitsResponse) {
         loadSnapshotCallCount += 1
+        await snapshotGate?.wait()
         return (try await readAccount(refreshToken: refreshToken), try await readRateLimits())
     }
 
@@ -984,6 +1248,24 @@ private final class FakeStatusItemRateLimitClient: @unchecked Sendable, CodexRat
         ),
         rateLimitsByLimitId: nil
     )
+}
+
+private actor DelegateSnapshotGate {
+    private var opened = false
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+    var isWaiting: Bool { !continuations.isEmpty }
+
+    func wait() async {
+        guard !opened else { return }
+        await withCheckedContinuation { continuations.append($0) }
+    }
+
+    func release() {
+        opened = true
+        let waiting = continuations
+        continuations.removeAll()
+        waiting.forEach { $0.resume() }
+    }
 }
 
 private struct FakeGitUpdateTooling: GitUpdateTooling {
@@ -1047,6 +1329,9 @@ private final class FakeAppRuntimeController: AppRuntimeControlling {
     private(set) var openedURLs: [URL] = []
     var promptedSecret: String?
     private(set) var promptCallCount = 0
+    var providerChoice: UsageProviderSelection?
+    private(set) var providerChoiceCallCount = 0
+    private(set) var previousProviderChoices: [UsageProviderSelection?] = []
 
     func terminate() {
         terminateCallCount += 1
@@ -1063,5 +1348,23 @@ private final class FakeAppRuntimeController: AppRuntimeControlling {
     func promptForSecret(title: String, message: String) -> String? {
         promptCallCount += 1
         return promptedSecret
+    }
+
+    func chooseUsageProviders(current: UsageProviderSelection?) -> UsageProviderSelection? {
+        providerChoiceCallCount += 1
+        previousProviderChoices.append(current)
+        return providerChoice
+    }
+}
+
+private actor DelegateClaudeUsageClient: ClaudeUsageClient {
+    private(set) var callCount = 0
+
+    func readUsage() async throws -> ClaudeUsageSnapshot {
+        callCount += 1
+        return ClaudeUsageSnapshot(windows: [
+            ClaudeUsageWindow(id: "weekly", title: "Weekly", usedPercent: 63,
+                              resetDescription: "Resets Nov 17 at 1pm (America/Los_Angeles)")
+        ])
     }
 }

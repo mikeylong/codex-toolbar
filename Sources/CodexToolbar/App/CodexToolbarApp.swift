@@ -9,6 +9,7 @@ protocol AppRuntimeControlling {
     func postNotification(title: String, body: String)
     func openURL(_ url: URL) throws
     func promptForSecret(title: String, message: String) -> String?
+    func chooseUsageProviders(current: UsageProviderSelection?) -> UsageProviderSelection?
 }
 
 @MainActor
@@ -31,6 +32,11 @@ private struct LiveAppRuntimeController: AppRuntimeControlling {
         guard NSWorkspace.shared.open(url) else {
             throw AppRuntimeError.openURLFailed(url)
         }
+    }
+
+    func chooseUsageProviders(current: UsageProviderSelection?) -> UsageProviderSelection? {
+        let chooser = UsageProviderChooser(current: current)
+        return chooser.runModal()
     }
 
     func promptForSecret(title: String, message: String) -> String? {
@@ -116,6 +122,7 @@ private struct CodexToolbarMenuBarApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let store: RateLimitStore
     private let openAIUsageStore: OpenAIUsageStore
+    private let claudeUsageStore: ClaudeUsageStore
     private let loginItemController: LoginItemController
     private let gitUpdateController: GitUpdateController
     private let codexDesktopAppProvider: any CodexDesktopAppProviding
@@ -124,8 +131,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let screenshotConfiguration: ScreenshotLaunchConfiguration?
     private let startupDiagnosticsConfiguration: StartupDiagnosticsConfiguration?
     private let appRuntime: any AppRuntimeControlling
-    private var statusItem: NSStatusItem?
-    private var popover: NSPopover?
+    private var statusItems: [UsageProvider: NSStatusItem] = [:]
+    private var popovers: [UsageProvider: NSPopover] = [:]
+    private var lifecycleTasks: [UsageProvider: Task<Void, Never>] = [:]
+    private var screenshotProvider: UsageProvider {
+        screenshotConfiguration?.scenario.claudeUsageSnapshot == nil ? .codex : .claude
+    }
+    private var statusItem: NSStatusItem? { statusItems[screenshotProvider] }
+    private var popover: NSPopover? { popovers[screenshotProvider] }
     private var startupDiagnosticsDidFinish = false
     var popoverCloseHandler: (() -> Void)?
 
@@ -138,6 +151,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         codexDesktopAppProvider = CodexDesktopAppController()
         maintenanceLaunchConfiguration = MaintenanceLaunchConfiguration.current()
         screenshotConfiguration = ScreenshotLaunchConfiguration.current()
+        claudeUsageStore = ClaudeUsageStore(
+            initialSnapshot: screenshotConfiguration?.scenario.claudeUsageSnapshot,
+            initialLastUpdated: screenshotConfiguration?.scenario.lastUpdated,
+            liveUpdatesEnabled: screenshotConfiguration == nil
+        )
         startupDiagnosticsConfiguration = StartupDiagnosticsConfiguration.current()
         appRuntime = LiveAppRuntimeController()
         super.init()
@@ -146,6 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     init(
         store: RateLimitStore,
         openAIUsageStore: OpenAIUsageStore = OpenAIUsageStore(isEnabled: true),
+        claudeUsageStore: ClaudeUsageStore = ClaudeUsageStore(),
         loginItemController: LoginItemController,
         gitUpdateController: GitUpdateController,
         codexDesktopAppProvider: any CodexDesktopAppProviding,
@@ -157,6 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ) {
         self.store = store
         self.openAIUsageStore = openAIUsageStore
+        self.claudeUsageStore = claudeUsageStore
         self.loginItemController = loginItemController
         self.gitUpdateController = gitUpdateController
         self.codexDesktopAppProvider = codexDesktopAppProvider
@@ -176,21 +196,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         NSApp.setActivationPolicy(.accessory)
         NSApp.appearance = screenshotConfiguration?.appearance.appAppearance
-        configureStatusItem()
-        configurePopover()
+        guard configureProviderSelectionIfNeeded() else {
+            appRuntime.terminate()
+            return
+        }
+        configureProviderItems()
         observeState()
         updateStatusItem()
-        Task {
-            await store.start()
-        }
-        Task {
-            if showsOpenAIUsage {
-                await openAIUsageStore.start()
-            }
-        }
+        synchronizeProviderLifecycle()
         gitUpdateController.start()
         maybeReportStartupDiagnostics()
         scheduleScreenshotCaptureIfNeeded()
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if claudeUsageStore.prepareForTermination() {
+            return .terminateNow
+        }
+        appRuntime.postNotification(title: "Claude usage is still stopping", body: "Try quitting CodexToolbar again in a moment.")
+        return .terminateCancel
     }
 
     private func runMaintenanceAction(_ configuration: MaintenanceLaunchConfiguration) {
@@ -211,35 +235,86 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         exit(result.exitCode)
     }
 
-    private func configureStatusItem() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem = item
-
-        guard let button = item.button else { return }
-        button.target = self
-        button.action = #selector(handleStatusItemClick(_:))
-        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        button.setAccessibilityLabel("Codex toolbar")
+    var enabledProviders: [UsageProvider] {
+        if screenshotConfiguration?.scenario.name == "providers" { return UsageProvider.allCases }
+        if screenshotConfiguration != nil { return [screenshotProvider] }
+        // The existing startup smoke-test record is a Codex readiness probe.
+        // Keep its behavior deterministic without changing the saved choice.
+        if startupDiagnosticsConfiguration != nil { return [.codex] }
+        return (preferences.usageProviderSelection ?? .codex).providers
     }
 
-    private func configurePopover() {
-        let popover = NSPopover()
-        popover.behavior = .transient
-        popover.contentSize = popoverContentSize
-        popover.contentViewController = NSHostingController(rootView: makeStatusMenuContentView())
-        self.popover = popover
+    func configureProviderSelectionIfNeeded() -> Bool {
+        guard screenshotConfiguration == nil, startupDiagnosticsConfiguration == nil,
+              preferences.usageProviderSelection == nil else { return true }
+        guard let selection = appRuntime.chooseUsageProviders(current: nil) else { return false }
+        preferences.setUsageProviderSelection(selection)
+        return true
     }
 
-    func makeStatusMenuContentView() -> StatusMenuContentView {
+    private func configureProviderItems() {
+        for popover in popovers.values { popover.performClose(nil) }
+        for item in statusItems.values { NSStatusBar.system.removeStatusItem(item) }
+        statusItems.removeAll()
+        popovers.removeAll()
+        for provider in enabledProviders {
+            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+            item.autosaveName = "CodexToolbar.\(provider.rawValue)"
+            statusItems[provider] = item
+            if let button = item.button {
+                button.target = self
+                button.action = #selector(handleStatusItemClick(_:))
+                button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+                button.setAccessibilityLabel("\(provider.title) usage")
+            }
+            let popover = NSPopover()
+            popover.behavior = .transient
+            popover.contentSize = popoverContentSize(for: provider)
+            popover.contentViewController = NSHostingController(rootView: makeStatusMenuContentView(provider: provider))
+            popovers[provider] = popover
+        }
+    }
+
+    func synchronizeProviderLifecycle() {
+        for provider in UsageProvider.allCases {
+            let previousTask = lifecycleTasks[provider]
+            lifecycleTasks[provider] = Task { [weak self] in
+                await previousTask?.value
+                guard let self else { return }
+                let enabled = enabledProviders.contains(provider)
+                if provider == .codex { await setCodexEnabled(enabled) }
+                else { await setClaudeEnabled(enabled) }
+            }
+        }
+    }
+
+    private func setCodexEnabled(_ enabled: Bool) async {
+        if enabled {
+            await store.start()
+            if showsOpenAIUsage { await openAIUsageStore.start() }
+        } else {
+            await store.stop()
+            await openAIUsageStore.stop()
+        }
+    }
+
+    private func setClaudeEnabled(_ enabled: Bool) async {
+        if enabled { await claudeUsageStore.start() }
+        else { await claudeUsageStore.stop() }
+    }
+
+    func makeStatusMenuContentView(provider: UsageProvider = .codex) -> StatusMenuContentView {
         StatusMenuContentView(
             store: store,
             openAIUsageStore: openAIUsageStore,
             screenshotAppearance: screenshotConfiguration?.appearance,
             visibleSupplementalFamilyIDs: visibleSupplementalFamilyIDs,
-            showsCredits: showsCredits,
-            showsOpenAIUsage: showsOpenAIUsage,
-            showsOpenCodexButton: shouldShowOpenCodexButton,
-            openCodexAction: makeOpenCodexAction()
+            showsCredits: provider == .codex && showsCredits,
+            showsOpenAIUsage: provider == .codex && showsOpenAIUsage,
+            showsOpenCodexButton: provider == .codex && shouldShowOpenCodexButton,
+            openCodexAction: provider == .codex ? makeOpenCodexAction() : nil,
+            claudeUsageStore: provider == .claude ? claudeUsageStore : nil,
+            provider: provider
         )
     }
 
@@ -252,6 +327,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             _ = store.state
             _ = store.statusMessage
             _ = store.cards.count
+            _ = claudeUsageStore.statusItemPresentation
+            _ = claudeUsageStore.statusItemTooltipText
+            _ = claudeUsageStore.statusBarAccessibilityText
             _ = loginItemController.isEnabled
             _ = loginItemController.statusMessage
         } onChange: { [weak self] in
@@ -264,18 +342,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateStatusItem() {
-        guard let button = statusItem?.button else { return }
-        updateStatusItemButton(button)
+        for (provider, item) in statusItems {
+            if let button = item.button { updateStatusItemButton(button, provider: provider) }
+        }
     }
 
-    var popoverContentSize: NSSize {
-        NSSize(width: 352, height: showsOpenAIUsage && openAIUsageStore.isEnabled ? 420 : 300)
+    var popoverContentSize: NSSize { popoverContentSize(for: screenshotProvider) }
+
+    func popoverContentSize(for provider: UsageProvider) -> NSSize {
+        NSSize(width: 352, height: provider == .claude ? 390 : (showsOpenAIUsage && openAIUsageStore.isEnabled ? 420 : 300))
     }
 
-    func updateStatusItemButton(_ button: NSStatusBarButton) {
-        switch store.statusItemPresentation {
+    func updateStatusItemButton(_ button: NSStatusBarButton, provider: UsageProvider = .codex) {
+        let presentation = provider == .codex ? store.statusItemPresentation : claudeUsageStore.statusItemPresentation
+        switch presentation {
         case let .text(text):
-            button.image = Self.statusItemImage()
+            button.image = Self.statusItemImage(provider: provider)
             button.imagePosition = .imageLeading
             button.imageScaling = .scaleProportionallyDown
             button.title = text
@@ -286,16 +368,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 appearance: button.effectiveAppearance,
                 glyphColor: palette.statusItemGlyphColor,
                 trackColor: palette.trackColor(for: bar.progressState),
-                fillColor: palette.fillColor(for: bar.progressState)
+                fillColor: palette.fillColor(for: bar.progressState),
+                provider: provider
             )
             button.imagePosition = .imageOnly
             button.imageScaling = .scaleNone
             button.title = ""
         }
-
-        button.toolTip = store.statusItemTooltipText
-        button.setAccessibilityLabel("Codex toolbar. \(store.statusBarAccessibilityText)")
-        button.sizeToFit()
+        button.toolTip = provider == .codex ? "Codex · " + store.statusItemTooltipText : claudeUsageStore.statusItemTooltipText
+        button.setAccessibilityLabel(provider == .codex ? "Codex toolbar. \(store.statusBarAccessibilityText)" : claudeUsageStore.statusBarAccessibilityText)
+        // NSStatusBar sizes variable-length items with native horizontal
+        // padding. Calling sizeToFit() here removes that space and makes
+        // adjacent providers' bars and icons touch.
     }
     private func maybeReportStartupDiagnostics() {
         guard
@@ -332,61 +416,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
-        guard let event = NSApp.currentEvent else {
-            togglePopover(relativeTo: sender)
-            return
-        }
-
-        switch event.type {
-        case .rightMouseUp:
-            showContextMenu(from: sender)
-        default:
-            togglePopover(relativeTo: sender)
-        }
-    }
-
-    private func togglePopover(relativeTo button: NSStatusBarButton) {
-        guard let popover else { return }
-
-        if popover.isShown {
-            popover.performClose(nil)
+        guard let provider = statusItems.first(where: { $0.value.button === sender })?.key else { return }
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            showContextMenu(from: sender, provider: provider)
         } else {
-            showPopover(relativeTo: button)
+            togglePopover(relativeTo: sender, provider: provider)
         }
     }
 
-    private func showPopover(relativeTo button: NSStatusBarButton) {
-        guard let popover else { return }
-        popover.contentSize = popoverContentSize
+    private func togglePopover(relativeTo button: NSStatusBarButton, provider: UsageProvider) {
+        guard let popover = popovers[provider] else { return }
+        if popover.isShown { popover.performClose(nil) }
+        else { showPopover(relativeTo: button, provider: provider) }
+    }
+
+    private func showPopover(relativeTo button: NSStatusBarButton, provider: UsageProvider) {
+        guard let popover = popovers[provider] else { return }
+        for (otherProvider, otherPopover) in popovers where otherProvider != provider { otherPopover.performClose(nil) }
+        popover.contentSize = popoverContentSize(for: provider)
         if let controller = popover.contentViewController as? NSHostingController<StatusMenuContentView> {
-            controller.rootView = makeStatusMenuContentView()
+            controller.rootView = makeStatusMenuContentView(provider: provider)
         }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
         Task {
-            guard showsOpenAIUsage else {
-                return
+            if provider == .claude {
+                await claudeUsageStore.refreshIfNeeded()
+            } else if showsOpenAIUsage {
+                await openAIUsageStore.refreshIfNeeded(maxAge: OpenAIUsageStore.staleRefreshMaximumAge)
             }
-
-            await openAIUsageStore.refreshIfNeeded(maxAge: OpenAIUsageStore.staleRefreshMaximumAge)
         }
     }
 
-    private func showContextMenu(from button: NSStatusBarButton) {
-        popover?.performClose(nil)
-
-        let menu = makeContextMenu()
-
-        statusItem?.menu = menu
+    private func showContextMenu(from button: NSStatusBarButton, provider: UsageProvider) {
+        popovers[provider]?.performClose(nil)
+        let item = statusItems[provider]
+        item?.menu = makeContextMenu(provider: provider)
         button.performClick(nil)
-        statusItem?.menu = nil
+        item?.menu = nil
     }
 
-    func makeContextMenu() -> NSMenu {
+    func makeContextMenu(provider: UsageProvider = .codex) -> NSMenu {
         let menu = NSMenu()
 
-        let refreshItem = NSMenuItem(title: "Refresh now", action: #selector(refreshNow), keyEquivalent: "")
+        let refreshItem = NSMenuItem(title: "Refresh now", action: #selector(refreshNow(_:)), keyEquivalent: "")
         refreshItem.target = self
+        refreshItem.representedObject = provider.rawValue
         menu.addItem(refreshItem)
 
         let launchTitle = loginItemController.isEnabled ? "Disable launch at login" : "Launch at login"
@@ -394,37 +469,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launchItem.target = self
         menu.addItem(launchItem)
 
-        for family in GetAccountRateLimitsResponse.supportedSupplementalFamilies where family.isUserToggleable {
-            let item = NSMenuItem(
-                title: "Show \(family.categoryLabel)",
-                action: #selector(toggleSupplementalFamilyVisibility(_:)),
+        if provider == .codex {
+            for family in GetAccountRateLimitsResponse.supportedSupplementalFamilies where family.isUserToggleable {
+                let item = NSMenuItem(
+                    title: "Show \(family.categoryLabel)",
+                    action: #selector(toggleSupplementalFamilyVisibility(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.state = visibleSupplementalFamilyIDs.contains(family.limitId) ? .on : .off
+                item.representedObject = family.limitId
+                menu.addItem(item)
+            }
+
+            let showCreditsItem = NSMenuItem(
+                title: "Show credits",
+                action: #selector(toggleCreditsVisibility),
                 keyEquivalent: ""
             )
-            item.target = self
-            item.state = visibleSupplementalFamilyIDs.contains(family.limitId) ? .on : .off
-            item.representedObject = family.limitId
-            menu.addItem(item)
+            showCreditsItem.target = self
+            showCreditsItem.state = showsCredits ? .on : .off
+            menu.addItem(showCreditsItem)
+
+            let showOpenAIUsageItem = NSMenuItem(
+                title: "Show API usage",
+                action: #selector(toggleOpenAIUsageVisibility),
+                keyEquivalent: ""
+            )
+            showOpenAIUsageItem.target = self
+            showOpenAIUsageItem.state = showsOpenAIUsage ? .on : .off
+            menu.addItem(showOpenAIUsageItem)
         }
 
-        let showCreditsItem = NSMenuItem(
-            title: "Show credits",
-            action: #selector(toggleCreditsVisibility),
-            keyEquivalent: ""
-        )
-        showCreditsItem.target = self
-        showCreditsItem.state = showsCredits ? .on : .off
-        menu.addItem(showCreditsItem)
+        let providersItem = NSMenuItem(title: "Choose providers…", action: #selector(chooseProviders), keyEquivalent: "")
+        providersItem.target = self
+        menu.addItem(providersItem)
 
-        let showOpenAIUsageItem = NSMenuItem(
-            title: "Show API usage",
-            action: #selector(toggleOpenAIUsageVisibility),
-            keyEquivalent: ""
-        )
-        showOpenAIUsageItem.target = self
-        showOpenAIUsageItem.state = showsOpenAIUsage ? .on : .off
-        menu.addItem(showOpenAIUsageItem)
-
-        if openAIUsageStore.isEnabled {
+        if provider == .codex && openAIUsageStore.isEnabled {
             menu.addItem(.separator())
 
             let configureOpenAIKeyItem = NSMenuItem(
@@ -478,18 +559,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return menu
     }
 
-    @objc private func refreshNow() {
-        Task {
-            async let storeRefresh: Void = store.refreshNow()
-            async let gitUpdateRefresh: Void = gitUpdateController.refreshNow()
+    @objc private func refreshNow(_ sender: NSMenuItem?) {
+        let provider = (sender?.representedObject as? String).flatMap(UsageProvider.init(rawValue:)) ?? .codex
+        Task { await refreshUsage(for: provider) }
+    }
 
-            if showsOpenAIUsage {
-                async let openAIUsageRefresh: Void = openAIUsageStore.refreshNow()
-                _ = await (storeRefresh, openAIUsageRefresh, gitUpdateRefresh)
-            } else {
-                _ = await (storeRefresh, gitUpdateRefresh)
-            }
+    func refreshUsage(for provider: UsageProvider) async {
+        guard enabledProviders.contains(provider) else { return }
+        if provider == .claude {
+            await claudeUsageStore.refreshNow()
+        } else {
+            async let rateLimits: Void = store.refreshNow()
+            async let updates: Void = gitUpdateController.refreshNow()
+            if showsOpenAIUsage { await openAIUsageStore.refreshNow() }
+            _ = await (rateLimits, updates)
         }
+    }
+
+    @objc private func chooseProviders() {
+        for popover in popovers.values { popover.performClose(nil) }
+        guard let choice = appRuntime.chooseUsageProviders(current: preferences.usageProviderSelection) else { return }
+        preferences.setUsageProviderSelection(choice)
+        configureProviderItems()
+        updateStatusItem()
+        synchronizeProviderLifecycle()
     }
 
     @objc private func toggleLaunchAtLogin() {
@@ -569,12 +662,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func handleInstallUpdateResult(_ result: GitUpdateInstallResult) {
         switch result {
         case .started:
-            popover?.performClose(nil)
+            for popover in popovers.values { popover.performClose(nil) }
             appRuntime.terminate()
         case let .openReleasePage(url):
             do {
                 try appRuntime.openURL(url)
-                popover?.performClose(nil)
+                for popover in popovers.values { popover.performClose(nil) }
             } catch {
                 appRuntime.postNotification(
                     title: "CodexToolbar update failed",
@@ -639,10 +732,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        popover?.performClose(nil)
+        popovers[.codex]?.performClose(nil)
     }
 
-    private static func statusItemImage() -> NSImage {
+    private static func statusItemImage(provider: UsageProvider = .codex) -> NSImage {
+        if provider == .claude {
+            // Match Codex's full-size filled disc. The SF circle variant has
+            // typographic margins that make it visibly smaller at 16 points.
+            let image = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { rect in
+                guard let context = NSGraphicsContext.current?.cgContext else { return false }
+                context.saveGState()
+                context.setFillColor(NSColor.black.cgColor)
+                context.fillEllipse(in: rect)
+                context.setBlendMode(.clear)
+                context.setLineWidth(1.2)
+                context.setLineCap(.round)
+                for index in 0..<3 {
+                    let angle = CGFloat.pi / 2 + CGFloat(index) * .pi / 3
+                    let dx = cos(angle) * 3.5
+                    let dy = sin(angle) * 3.5
+                    context.move(to: CGPoint(x: rect.midX - dx, y: rect.midY - dy))
+                    context.addLine(to: CGPoint(x: rect.midX + dx, y: rect.midY + dy))
+                }
+                context.strokePath()
+                context.restoreGState()
+                return true
+            }
+            image.isTemplate = true
+            return image
+        }
         if let image = StatusItemAssetLoader.image(named: "CodexStatusGlyph") {
             image.isTemplate = false
             image.size = NSSize(width: 16, height: 16)
@@ -675,7 +793,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appearance: NSAppearance,
         glyphColor: NSColor,
         trackColor: NSColor,
-        fillColor: NSColor
+        fillColor: NSColor,
+        provider: UsageProvider = .codex
     ) -> NSImage {
         let glyphSize = NSSize(width: 16, height: 16)
         let gap: CGFloat = 4
@@ -697,7 +816,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         appearance.performAsCurrentDrawingAppearance {
             image.lockFocus()
-            drawTintedGlyph(in: glyphRect, color: glyphColor)
+            drawTintedGlyph(in: glyphRect, color: glyphColor, provider: provider)
             drawBar(
                 in: barRect,
                 remainingPercent: bar.remainingPercent,
@@ -711,8 +830,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return image
     }
 
-    private static func drawTintedGlyph(in rect: NSRect, color: NSColor) {
-        let glyphImage = statusItemImage()
+    private static func drawTintedGlyph(in rect: NSRect, color: NSColor, provider: UsageProvider) {
+        let glyphImage = statusItemImage(provider: provider)
         glyphImage.draw(in: rect)
         color.setFill()
         rect.fill(using: .sourceIn)
@@ -762,7 +881,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(nanoseconds: 350_000_000)
 
             if screenshotConfiguration.shouldOpenPopover, let button = statusItem?.button {
-                showPopover(relativeTo: button)
+                showPopover(relativeTo: button, provider: screenshotProvider)
                 try? await Task.sleep(nanoseconds: 300_000_000)
             }
 
@@ -795,42 +914,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func captureStatusItem(to directoryURL: URL, configuration: ScreenshotLaunchConfiguration) throws {
-        guard let button = statusItem?.button else {
-            return
+        var captures: [(frame: NSRect, representation: NSBitmapImageRep)] = []
+        for provider in enabledProviders {
+            guard let button = statusItems[provider]?.button, let window = button.window else {
+                throw ScreenshotCaptureError.unableToCaptureStatusItem
+            }
+            button.layoutSubtreeIfNeeded()
+            let bounds = button.bounds.integral
+            guard bounds.width > 0, bounds.height > 0,
+                  let representation = button.bitmapImageRepForCachingDisplay(in: bounds) else {
+                throw ScreenshotCaptureError.unableToCaptureStatusItem
+            }
+            button.cacheDisplay(in: bounds, to: representation)
+            let frame = window.convertToScreen(button.convert(bounds, to: nil))
+            captures.append((frame, representation))
+            print("Status item \(provider.rawValue): button width \(bounds.width) pt, image width \(button.image?.size.width ?? 0) pt")
         }
-
-        button.layoutSubtreeIfNeeded()
-
-        let buttonBounds = button.bounds.integral
-        guard
-            buttonBounds.width > 0,
-            buttonBounds.height > 0,
-            let buttonRepresentation = button.bitmapImageRepForCachingDisplay(in: buttonBounds)
-        else {
-            throw ScreenshotCaptureError.unableToCaptureStatusItem
-        }
-
-        button.cacheDisplay(in: buttonBounds, to: buttonRepresentation)
-
+        guard let first = captures.first else { return }
+        // Preserve the actual native item positions so a paired capture can
+        // expose missing inter-item spacing instead of hiding it in a crop.
+        let captureBounds = captures.dropFirst().reduce(first.frame) { $0.union($1.frame) }
         let horizontalPadding: CGFloat = 8
         let verticalPadding: CGFloat = 6
         let canvasSize = NSSize(
-            width: buttonBounds.width + (horizontalPadding * 2),
-            height: buttonBounds.height + (verticalPadding * 2)
+            width: captureBounds.width + (horizontalPadding * 2),
+            height: captureBounds.height + (verticalPadding * 2)
         )
 
         let image = NSImage(size: canvasSize)
         image.lockFocus()
         backgroundColor(for: configuration.appearance).setFill()
         NSBezierPath(rect: NSRect(origin: .zero, size: canvasSize)).fill()
-        buttonRepresentation.draw(
-            in: NSRect(
-                x: horizontalPadding,
-                y: verticalPadding,
-                width: buttonBounds.width,
-                height: buttonBounds.height
+        for capture in captures {
+            capture.representation.draw(
+                in: capture.frame.offsetBy(
+                    dx: horizontalPadding - captureBounds.minX,
+                    dy: verticalPadding - captureBounds.minY
+                )
             )
-        )
+        }
         image.unlockFocus()
 
         let fileURL = directoryURL.appendingPathComponent("\(configuration.scenario.name)-\(configuration.appearance.rawValue)-status-item.png")

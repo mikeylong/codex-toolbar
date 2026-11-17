@@ -704,6 +704,35 @@ final class RateLimitStoreTests: XCTestCase {
         await store.stop()
     }
 
+    func testStopStartResubscribesToLiveUpdatesAndDisconnectEvents() async {
+        let client = FakeCodexRateLimitClient()
+        let store = RateLimitStore(
+            client: client,
+            reconnectDelayNanoseconds: 50_000_000,
+            refreshDelayNanosecondsProvider: { 10_000_000_000 }
+        )
+        await store.start()
+        await store.stop()
+        await store.start()
+
+        let updated = GetAccountRateLimitsResponse(
+            rateLimits: CodexRateLimitsSnapshot(
+                credits: nil, limitId: "codex", limitName: "Codex", planType: .pro,
+                primary: CodexRateLimitWindow(resetsAt: nil, usedPercent: 37, windowDurationMins: 300),
+                secondary: nil
+            ),
+            rateLimitsByLimitId: nil
+        )
+        client.emit(.rateLimitsUpdated(updated))
+        await waitUntil { store.cards.first?.usedPercent == 37 }
+        let connectCount = client.connectCallCount
+        client.emit(.disconnected("Restarted connection lost."))
+        await waitUntil { client.connectCallCount > connectCount && store.state == .ready }
+
+        XCTAssertEqual(store.state, .ready)
+        await store.stop()
+    }
+
     func testPeriodicRefreshLoadsSnapshotAgain() async {
         let client = FakeCodexRateLimitClient()
         let store = RateLimitStore(
@@ -1045,10 +1074,7 @@ final class RateLimitStoreTests: XCTestCase {
 }
 
 private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimitClient {
-    private var continuation: AsyncStream<CodexAppServerEvent>.Continuation?
-    private lazy var stream: AsyncStream<CodexAppServerEvent> = AsyncStream { continuation in
-        self.continuation = continuation
-    }
+    private let eventChannel = CodexAppServerEventChannel()
     private var loadSnapshotContinuation: CheckedContinuation<Void, Never>?
 
     private(set) var connectCallCount = 0
@@ -1077,7 +1103,7 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
     private var isConnected = false
 
     func events() -> AsyncStream<CodexAppServerEvent> {
-        stream
+        eventChannel.subscribe()
     }
 
     func connect() async throws {
@@ -1141,7 +1167,7 @@ private final class FakeCodexRateLimitClient: @unchecked Sendable, CodexRateLimi
         if case .disconnected = event {
             isConnected = false
         }
-        continuation?.yield(event)
+        eventChannel.yield(event)
     }
 
     func resumeLoadSnapshot() {
