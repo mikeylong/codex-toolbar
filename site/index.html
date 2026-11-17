@@ -3,23 +3,26 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Codex Toolbar for macOS</title>
+    <title>Codex Toolbar — Codex and Claude usage for macOS</title>
     <meta
       name="description"
-      content="Codex Toolbar is a minimal macOS menu bar app that shows your Codex rate-limit remaining values at a glance."
+      content="See your remaining Codex and Claude usage in the macOS menu bar. Choose either provider or both, check reset times, and open your usage dashboard."
     >
     <meta name="color-scheme" content="light dark">
-    <meta property="og:title" content="Codex Toolbar for macOS">
+    <meta property="og:title" content="Codex and Claude usage, in your menu bar.">
     <meta
       property="og:description"
-      content="A minimal macOS menu bar app that keeps your Codex rate limits visible in the menu bar."
+      content="Choose Codex, Claude, or both. Separate menu bar items keep your remaining usage and reset times close at hand. For macOS 14 and later."
     >
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://codextoolbar.com">
-    <meta property="og:image" content="https://codextoolbar.com/assets/codex-toolbar-share-card-20260319.png">
-    <meta property="og:image:alt" content="Codex Toolbar branded share card without a product screenshot.">
+    <meta property="og:image" content="https://codextoolbar.com/assets/codex-toolbar-share-card-20261117.png">
+    <meta property="og:image:alt" content="Codex Toolbar: Codex and Claude usage, in your menu bar. Choose either provider or both.">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:image" content="https://codextoolbar.com/assets/codex-toolbar-share-card-20260319.png">
+    <meta name="twitter:image" content="https://codextoolbar.com/assets/codex-toolbar-share-card-20261117.png">
+    <meta name="twitter:image:alt" content="Codex Toolbar: Codex and Claude usage, in your menu bar. Choose either provider or both.">
     <link rel="canonical" href="https://codextoolbar.com">
     <link
       id="site-favicon"
@@ -71,6 +74,7 @@
         <nav aria-label="Primary">
           <ul class="nav-list">
             <li><a href="#features">Features</a></li>
+            <li><a href="#providers">Choose providers</a></li>
             <li><a href="#install">Install</a></li>
           </ul>
         </nav>
@@ -82,44 +86,91 @@
         <div class="wrap hero-grid">
           <div class="hero-copy">
             <p class="eyebrow">macOS menu bar utility</p>
-            <h1>Keep Codex rate limits visible.</h1>
+            <h1>Codex and Claude usage, in your menu bar.</h1>
             <p class="lede">
-              Codex Toolbar puts your remaining Codex usage in the menu bar, with a detailed
-              popover, automatic refresh, and a direct jump into the Codex desktop app.
+              Keep an eye on your remaining usage while you work. Choose Codex, Claude,
+              or both. Each gets its own menu bar item and a focused usage panel.
             </p>
             <div class="action-row" aria-label="Primary actions">
               <a class="action-link" href="#install">View install options</a>
             </div>
             <p class="meta">
-              Requires macOS 14 or later and the Codex CLI installed locally.
+              For macOS 14 or later. Uses your signed-in Codex CLI or Claude Code CLI.
             </p>
           </div>
-          <figure class="hero-media">
-            <picture>
+          <figure class="hero-media menu-bar-example">
+            <p class="eyebrow">With both providers enabled</p>
+            <picture class="menu-bar-capture">
               <source
-                srcset="/assets/codextoolbar-tahoe-dark.png"
+                srcset="/assets/providers-dark-status-item.png"
                 media="(prefers-color-scheme: dark)"
               >
               <img
-                src="/assets/codextoolbar-tahoe-light.png"
-                alt="Codex Toolbar showing a Weekly Codex rate-limit projection in the macOS popover, using sample data."
-                width="704"
-                height="520"
+                src="/assets/providers-light-status-item.png" width="352" height="68"
+                alt="Separate Codex and Claude menu bar items, each with its own remaining-usage bar, using sample data."
               >
             </picture>
+            <figcaption>Two providers. Two usage bars.<br>Open either item for the details.</figcaption>
           </figure>
         </div>
       </section>
 
       <section id="features" class="section">
         <div class="wrap">
-          <h2>Features</h2>
+          <div class="section-intro">
+            <h2>Your usage, a click away.</h2>
+            <p>Open a provider's menu bar item to check what remains and when it resets.
+              Both panels include <strong>View usage</strong> to open that provider's dashboard in your browser.</p>
+          </div>
+          <div class="provider-examples">
+            <figure class="provider-example">
+              <figcaption>
+                <h3>Codex</h3>
+                <p>Track your usage windows and see whether your current pace will last until reset.
+                  Optional categories include Codex Spark.</p>
+              </figcaption>
+              <picture>
+                <source srcset="/assets/codextoolbar-tahoe-dark.png" media="(prefers-color-scheme: dark)">
+                <img src="/assets/codextoolbar-tahoe-light.png" width="704" height="512" loading="lazy"
+                  alt="Codex usage panel showing 55% weekly usage remaining, reset timing, a pace forecast, and View usage.">
+              </picture>
+            </figure>
+            <figure class="provider-example">
+              <figcaption>
+                <h3>Claude</h3>
+                <p>Check session and weekly subscription limits, with model-specific limits
+                  shown separately when available.</p>
+              </figcaption>
+              <picture>
+                <source srcset="/assets/claude-usage-dark.png" media="(prefers-color-scheme: dark)">
+                <img src="/assets/claude-usage-light.png" width="704" height="872" loading="lazy"
+                  alt="Claude usage panel showing session, weekly, and model-specific limits, reset timing, and View usage.">
+              </picture>
+            </figure>
+          </div>
+          <p class="screenshot-note">Separate panel examples from v0.1.21, shown with sample data. Available limits depend on your account.</p>
           <ul class="feature-list">
-            <li>See your remaining Codex quota without keeping the main app open.</li>
-            <li>Check reset timing and detailed usage in a quick menu bar popover.</li>
-            <li>Launch at login so your quota status is always available.</li>
-            <li>Optionally show additional categories, including Codex Spark.</li>
+            <li>Refreshes automatically, with a manual refresh in each item's right-click menu.</li>
+            <li>Launch at login to keep usage close at hand.</li>
+            <li>Uses your existing CLI sign-in. You don't need to keep an interactive CLI session open.</li>
           </ul>
+        </div>
+      </section>
+
+      <section id="providers" class="section chooser-section">
+        <div class="wrap chooser-grid">
+          <div class="section-intro">
+            <h2>Choose what belongs in your menu bar.</h2>
+            <p>Select Codex, Claude, or both when you first open the app. Your choice is remembered.</p>
+            <p>To change it later, right-click either menu bar item and select <strong>Choose providers…</strong>.</p>
+          </div>
+          <figure class="chooser-example">
+            <picture>
+              <source srcset="/assets/provider-chooser-dark.png" media="(prefers-color-scheme: dark)">
+              <img src="/assets/provider-chooser-light.png" width="664" height="644" loading="lazy"
+                alt="Provider chooser with separate Codex and Claude checkboxes, so either or both can be selected, and a Show usage button.">
+            </picture>
+          </figure>
         </div>
       </section>
 
@@ -131,7 +182,8 @@
           <div class="install-options">
             <div>
               <h3>Quick Install</h3>
-              <p>Download the latest release, open the disk image, and drag the app into Applications.</p>
+              <p>Download the latest release, open the disk image, and drag the app into Applications.
+                Open it and choose the providers you want to see.</p>
               <a
                 class="action-link direct-download-link"
                 href="https://github.com/mikeylong/codex-toolbar/releases/download/v0.1.21/CodexToolbar-0.1.21.dmg"
@@ -156,15 +208,26 @@ cd codex-toolbar
 ./scripts/install_app.sh</code></pre>
             </div>
           </div>
-          <div class="install-help">
-            <h3>Need Codex CLI?</h3>
-            <p>Install it once with npm, then run <code>codex</code> to sign in and pair it with CodexToolbar.</p>
-            <pre class="code-block"><code>npm i -g @openai/codex</code></pre>
-            <p class="install-help-link">
-              <a class="release-link" href="https://developers.openai.com/codex/cli">
-                OpenAI Codex CLI docs
-              </a>
-            </p>
+          <div class="provider-setup">
+            <div class="section-intro">
+              <h3>Sign in to the providers you use</h3>
+              <p>Only install the CLI for the provider you want to display. To show both, set up both on this Mac.</p>
+            </div>
+            <div class="setup-options">
+              <div class="install-help">
+                <h3>For Codex</h3>
+                <p>Install Codex CLI, then run <code>codex</code> and sign in.</p>
+                <pre class="code-block"><code>npm i -g @openai/codex</code></pre>
+                <p class="install-help-link"><a class="release-link" href="https://developers.openai.com/codex/cli">Codex CLI setup</a></p>
+              </div>
+              <div class="install-help">
+                <h3>For Claude</h3>
+                <p>Install a current Claude Code CLI and sign in with your Claude subscription.
+                  API billing accounts don't provide subscription limits.</p>
+                <pre class="code-block"><code>claude auth login</code></pre>
+                <p class="install-help-link"><a class="release-link" href="https://code.claude.com/docs/en/setup">Claude Code setup</a></p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
